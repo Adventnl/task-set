@@ -64,6 +64,14 @@ button:disabled { cursor: not-allowed; }
 .voice-label { color: #8b9296; font-size: 11px; font-weight: 600; letter-spacing: .05em; }
 .voice-content { display: grid; gap: 10px; }
 .audio-player { width: min(100%, 350px); height: 34px; }
+.audio-clip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ai-status { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 28px; color: #777d81; font-size: 12px; }
+.ai-status:empty { display: none; }
+.suggestion-row { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; padding: 8px 0; }
+.suggestion-row > div:first-child { display: grid; gap: 4px; }
+.suggestion-tag { color: #547b54; font-size: 11px; font-weight: 600; }
+.suggestion-actions { display: flex; align-items: center; gap: 12px; }
+.suggestion-actions .inline-link { min-height: 44px; }
 .transcript-text { color: #555b5f; }
 .transcript-form textarea { width: 100%; padding: 10px 12px; resize: vertical; border: 1px solid #d8dde0; border-radius: 8px; }
 .transcript-form > div { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
@@ -96,7 +104,10 @@ button:disabled { cursor: not-allowed; }
 .composer-hint { color: #a0a5a9; font-size: 11px; }
 .composer-hint span { margin: 0 4px; }
 .composer-buttons { display: flex; gap: 8px; }
-.send-button { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; color: #fff; background: #3975bb; }
+.send-button { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 8px; color: #fff; background: #3975bb; }
+.record-button { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid #d9dee2; border-radius: 8px; color: #687078; background: #fff; touch-action: none; }
+.record-button:hover:not(:disabled) { background: #f2f3f3; }
+.record-button.is-recording { color: #a73d36; border-color: #dca5a1; background: #fff3f0; }
 .send-button:hover:not(:disabled) { background: #2c639f; }
 .send-button:disabled { color: #a7adb1; background: #edf0f2; }
 .composer-foot { display: flex; justify-content: space-between; margin-top: 8px; color: #a1a6aa; font-size: 11px; }
@@ -147,7 +158,7 @@ button:disabled { cursor: not-allowed; }
 @media (max-width: 440px) {
   .composer-hint { display: none; }
   .composer-controls { justify-content: flex-end; }
-  .composer-foot span { display: none; }
+  .composer-foot span:last-child { display: none; }
   .dialog-actions { align-items: flex-start; flex-direction: column; }
   .dialog-action-right { margin-left: 0; align-self: flex-end; }
 }

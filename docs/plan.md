@@ -46,6 +46,8 @@ Add sign-in, private account-scoped storage, a local write queue with stable IDs
 
 ### 4. Voice and AI
 
+Implementation status (25 September 2026): Local browser recording, audio playback/download, editable transcripts, draft task suggestions, and a Cloudflare Worker AI connector have been built. AI use requires an explicit click. The Worker is not deployed and hosted Access authentication has not been configured. Browser audio is saved in its native format; MP3 transcoding is not included. The recording remains local because account sync is not present.
+
 Add hold-to-record capture, save the audio locally on release, then transcribe and extract task suggestions. Show saved, transcribing, extracting, ready, and needs-retry states. Until transcription succeeds, the recording remains on its originating device; other synced devices can show a placeholder. Keep the local audio until the transcript is safely stored and synced, then remove it by default unless the user chooses to keep it.
 
 A Cloudflare Worker on the existing domain is the candidate AI endpoint. It should verify the signed-in user and enforce per-user upload and request limits before calling hosted transcription and text models. Model output must be validated, tied to the source capture, and processed idempotently so retries do not create duplicate tasks. If AI is unavailable or at its usage limit, the original capture remains available for retry or manual task creation. Confirm model quality, recording format, and current free-tier allowances before locking the provider or enabling metered services.

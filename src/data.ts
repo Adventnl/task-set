@@ -5,6 +5,7 @@ export interface Capture {
   createdAt: string;
   audio?: Blob;
   mimeType?: string;
+  aiStatus?: 'saved' | 'ready' | 'needs-retry';
 }
 
 export interface Task {
@@ -17,6 +18,7 @@ export interface Task {
   reminderAt: string | null;
   pinned: boolean;
   completedAt: string | null;
+  suggestionStatus?: 'suggested' | 'dismissed' | null;
 }
 
 const DATABASE_NAME = 'task-set';
@@ -25,7 +27,6 @@ const CAPTURES_STORE = 'captures';
 const TASKS_STORE = 'tasks';
 
 let databasePromise: Promise<IDBDatabase> | null = null;
-let fallbackIdCounter = 0;
 
 function openDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined') {
@@ -104,6 +105,15 @@ export async function saveCapture(capture: Capture): Promise<void> {
   await transactionComplete(transaction);
 }
 
+export async function saveTranscriptAndDismissDrafts(capture: Capture, drafts: Task[]): Promise<void> {
+  const database = await openDatabase();
+  const transaction = database.transaction([CAPTURES_STORE, TASKS_STORE], 'readwrite');
+  transaction.objectStore(CAPTURES_STORE).put(capture);
+  const taskStore = transaction.objectStore(TASKS_STORE);
+  for (const draft of drafts) taskStore.put({ ...draft, suggestionStatus: 'dismissed' });
+  await transactionComplete(transaction);
+}
+
 export async function saveTask(task: Task): Promise<void> {
   const database = await openDatabase();
   const transaction = database.transaction(TASKS_STORE, 'readwrite');
@@ -119,11 +129,8 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 export function createId(): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID();
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    throw new Error('Secure random IDs are unavailable in this browser.');
   }
-  fallbackIdCounter += 1;
-  return `${Date.now().toString(36)}-${fallbackIdCounter.toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
+  return globalThis.crypto.randomUUID();
 }

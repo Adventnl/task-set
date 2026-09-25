@@ -7,6 +7,7 @@ import {
   CircleHelp,
   Inbox,
   LayoutList,
+  Mic,
   Plus,
   Search,
   X,
@@ -16,14 +17,17 @@ import {
   deleteTask,
   loadData,
   saveCapture,
+  saveTranscriptAndDismissDrafts,
   saveTask,
   type Capture,
   type Task,
 } from './data'
+import { processCapture, type ProcessingPhase } from './services/aiService'
+import { useVoiceRecorder } from './shared/hooks/useVoiceRecorder'
 
 type View = 'feed' | 'today' | 'inbox' | 'upcoming'
 type Editor = { captureId: string; task?: Task }
-type TaskInput = { title: string; dueAt: string | null; pinned: boolean }
+type TaskInput = { title: string; dueAt: string | null; reminderAt: string | null; pinned: boolean }
 
 const navigation: { id: View; label: string; icon: typeof LayoutList }[] = [
   { id: 'feed', label: 'Feed', icon: LayoutList },
@@ -68,7 +72,7 @@ function fromLocalInput(value: string): string | null {
 }
 
 function tasksForView(tasks: Task[], view: View): Task[] {
-  const active = tasks.filter((task) => !task.completedAt)
+  const active = tasks.filter((task) => !task.completedAt && !task.suggestionStatus)
   const endOfToday = new Date()
   endOfToday.setHours(23, 59, 59, 999)
   const filtered = active.filter((task) => {
@@ -84,7 +88,7 @@ function tasksForView(tasks: Task[], view: View): Task[] {
   })
 }
 
-function AudioClip({ blob }: { blob: Blob }) {
+function AudioClip({ blob, id }: { blob: Blob; id: string }) {
   const [url, setUrl] = useState('')
 
   useEffect(() => {
@@ -93,7 +97,8 @@ function AudioClip({ blob }: { blob: Blob }) {
     return () => URL.revokeObjectURL(nextUrl)
   }, [blob])
 
-  return url ? <audio className="audio-player" controls preload="metadata" src={url} aria-label="Voice recording" /> : null
+  const extension = blob.type.startsWith('audio/mp4') ? 'm4a' : blob.type.startsWith('audio/mpeg') ? 'mp3' : blob.type.startsWith('audio/wav') ? 'wav' : 'webm'
+  return url ? <div className="audio-clip"><audio className="audio-player" controls preload="metadata" src={url} aria-label="Voice recording" /><a className="inline-link" href={url} download={`task-set-${id}.${extension}`}>Download recording</a></div> : null
 }
 
 function TaskRow({ task, onToggle, onEdit, compact = false }: {
@@ -109,9 +114,10 @@ function TaskRow({ task, onToggle, onEdit, compact = false }: {
       </button>
       <button className="task-body" type="button" onClick={() => onEdit(task)}>
         <span className="task-title">{task.title}</span>
-        {(task.dueAt || task.pinned) && (
+        {(task.dueAt || task.reminderAt || task.pinned) && (
           <span className="task-meta">
             {task.dueAt && <span>Due {dateTimeLabel(task.dueAt)}</span>}
+            {task.reminderAt && <span>Remind {dateTimeLabel(task.reminderAt)}</span>}
             {task.pinned && <span>On Today</span>}
           </span>
         )}
@@ -129,6 +135,7 @@ function TaskEditor({ editor, capture, onClose, onSave, onDelete }: {
 }) {
   const [title, setTitle] = useState(editor.task?.title ?? (capture?.text || '').slice(0, 120))
   const [dueAt, setDueAt] = useState(toLocalInput(editor.task?.dueAt ?? null))
+  const [reminderAt, setReminderAt] = useState(toLocalInput(editor.task?.reminderAt ?? null))
   const [pinned, setPinned] = useState(editor.task?.pinned ?? false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -159,7 +166,7 @@ function TaskEditor({ editor, capture, onClose, onSave, onDelete }: {
     setBusy(true)
     setError('')
     try {
-      await onSave({ title: title.trim(), dueAt: fromLocalInput(dueAt), pinned })
+      await onSave({ title: title.trim(), dueAt: fromLocalInput(dueAt), reminderAt: fromLocalInput(reminderAt), pinned })
     } catch {
       setError('Could not save the task. Please try again.')
       setBusy(false)
@@ -193,7 +200,12 @@ function TaskEditor({ editor, capture, onClose, onSave, onDelete }: {
               <label className="field-label" htmlFor="task-due">Due date <span>optional</span></label>
               <input id="task-due" className="text-field" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
             </div>
+            <div>
+              <label className="field-label" htmlFor="task-reminder">Reminder <span>optional</span></label>
+              <input id="task-reminder" className="text-field" type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} />
+            </div>
           </div>
+          <p className="field-note">Reminder times are saved here; notifications are not available yet.</p>
           <label className="pin-row"><input type="checkbox" checked={pinned} onChange={(event) => setPinned(event.target.checked)} /> Keep on Today</label>
           {error && <p className="form-error" role="alert">{error}</p>}
           <div className="dialog-actions">
@@ -223,11 +235,29 @@ export default function App() {
   const [online, setOnline] = useState(navigator.onLine)
   const [editingTranscriptId, setEditingTranscriptId] = useState<string | null>(null)
   const [transcriptDraft, setTranscriptDraft] = useState('')
+  const [processing, setProcessing] = useState<Record<string, ProcessingPhase>>({})
+  const [localSaveFailures, setLocalSaveFailures] = useState<Set<string>>(new Set())
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const savingRef = useRef(false)
   const pendingTaskIdsRef = useRef(new Set<string>())
+  const pendingAiIdsRef = useRef(new Set<string>())
+  const voice = useVoiceRecorder(async (audio) => {
+    const capture: Capture = { id: createId(), kind: 'voice', text: '', audio, mimeType: audio.type, aiStatus: 'saved', createdAt: new Date().toISOString() }
+    setCaptures((current) => [...current, capture])
+    setView('feed')
+    setSearch('')
+    setSearchOpen(false)
+    requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight })
+    try {
+      await saveCapture(capture)
+      setAnnouncement('Recording saved in this browser')
+    } catch {
+      setLocalSaveFailures((current) => new Set(current).add(capture.id))
+      throw new Error('Could not save recording')
+    }
+  })
 
   useEffect(() => {
     let active = true
@@ -297,6 +327,54 @@ export default function App() {
     }
   }
 
+  async function retryLocalSave(capture: Capture) {
+    try {
+      await saveCapture(capture)
+      setLocalSaveFailures((current) => { const next = new Set(current); next.delete(capture.id); return next })
+      setAnnouncement('Recording saved in this browser')
+    } catch { setError('Could not save the recording. It remains available in this open tab.') }
+  }
+
+  async function processAi(capture: Capture) {
+    if (pendingAiIdsRef.current.has(capture.id) || localSaveFailures.has(capture.id)) return
+    pendingAiIdsRef.current.add(capture.id)
+    setProcessing((current) => ({ ...current, [capture.id]: capture.kind === 'voice' && !capture.text ? 'transcribing' : 'extracting' }))
+    try {
+      const result = await processCapture(capture, (phase) => setProcessing((current) => ({ ...current, [capture.id]: phase })))
+      setCaptures((current) => current.map((item) => item.id === capture.id ? result.capture : item))
+      setTasks((current) => {
+        const next = new Map(current.map((task) => [task.id, task]))
+        for (const task of result.suggestions) next.set(task.id, task)
+        return [...next.values()]
+      })
+      setAnnouncement(result.suggestions.length ? `${result.suggestions.length} task suggestion${result.suggestions.length === 1 ? '' : 's'} ready` : 'No task suggestions found')
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'AI is unavailable. Try again later.'
+      try {
+        const latest = (await loadData()).captures.find((item) => item.id === capture.id) ?? capture
+        const failed: Capture = { ...latest, aiStatus: 'needs-retry' }
+        await saveCapture(failed)
+        setCaptures((current) => current.map((item) => item.id === capture.id ? failed : item))
+      } catch { /* The original capture remains in memory and IndexedDB if its first save succeeded. */ }
+      setError(message)
+    } finally {
+      pendingAiIdsRef.current.delete(capture.id)
+      setProcessing((current) => { const next = { ...current }; delete next[capture.id]; return next })
+    }
+  }
+
+  async function reviewSuggestion(task: Task, action: 'accept' | 'dismiss') {
+    if (pendingTaskIdsRef.current.has(task.id)) return
+    pendingTaskIdsRef.current.add(task.id)
+    const next: Task = { ...task, suggestionStatus: action === 'accept' ? null : 'dismissed', updatedAt: new Date().toISOString() }
+    try {
+      await saveTask(next)
+      setTasks((current) => current.map((item) => item.id === task.id ? next : item))
+      setAnnouncement(action === 'accept' ? 'Task added' : 'Suggestion dismissed')
+    } catch { setError('Could not update the suggestion. Please try again.') }
+    finally { pendingTaskIdsRef.current.delete(task.id) }
+  }
+
   async function saveEditedTask(input: TaskInput) {
     if (!editor) return
     const now = new Date().toISOString()
@@ -334,9 +412,13 @@ export default function App() {
   }
 
   async function saveTranscript(capture: Capture) {
-    const next = { ...capture, text: transcriptDraft.trim() }
+    const next: Capture = { ...capture, text: transcriptDraft.trim(), aiStatus: 'saved' }
     try {
-      await saveCapture(next)
+      const drafts = next.text !== capture.text ? tasks.filter((task) => task.captureId === capture.id && task.suggestionStatus === 'suggested') : []
+      await saveTranscriptAndDismissDrafts(next, drafts)
+      if (drafts.length) {
+        setTasks((current) => current.map((task) => task.captureId === capture.id && task.suggestionStatus === 'suggested' ? { ...task, suggestionStatus: 'dismissed' } : task))
+      }
       setCaptures((current) => current.map((item) => item.id === capture.id ? next : item))
       setEditingTranscriptId(null)
       setTranscriptDraft('')
@@ -401,7 +483,7 @@ export default function App() {
               visibleCaptures.length ? (
                 <div className="capture-list">
                   {visibleCaptures.map((capture, index) => {
-                    const captureTasks = tasks.filter((task) => task.captureId === capture.id)
+                    const captureTasks = tasks.filter((task) => task.captureId === capture.id && task.suggestionStatus !== 'dismissed')
                     const showDay = index === 0 || dayKey(visibleCaptures[index - 1].createdAt) !== dayKey(capture.createdAt)
                     return (
                       <div key={capture.id}>
@@ -412,13 +494,26 @@ export default function App() {
                             <div className="capture-byline"><time dateTime={capture.createdAt}>{timeLabel(capture.createdAt)}</time>{capture.kind === 'voice' && <span className="voice-label">VOICE</span>}</div>
                             {capture.kind === 'text' ? <p className="capture-text">{capture.text}</p> : (
                               <div className="voice-content">
-                                {capture.audio && <AudioClip blob={capture.audio} />}
+                                {capture.audio && <AudioClip blob={capture.audio} id={capture.id} />}
                                 {editingTranscriptId === capture.id ? (
                                   <div className="transcript-form"><textarea value={transcriptDraft} onChange={(event) => setTranscriptDraft(event.target.value)} placeholder="Write what you said…" aria-label="Transcript" rows={3} /><div><button className="text-button" type="button" onClick={() => setEditingTranscriptId(null)}>Cancel</button><button className="small-primary" type="button" onClick={() => void saveTranscript(capture)}>Save text</button></div></div>
-                                ) : capture.text ? <p className="capture-text transcript-text">{capture.text} <button className="inline-link" type="button" onClick={() => { setEditingTranscriptId(capture.id); setTranscriptDraft(capture.text) }}>Edit text</button></p> : <button className="inline-link add-transcript" type="button" onClick={() => { setEditingTranscriptId(capture.id); setTranscriptDraft('') }}>Add text to this recording</button>}
+                                ) : capture.text ? <p className="capture-text transcript-text">{capture.text} <button className="inline-link" type="button" disabled={!!processing[capture.id]} onClick={() => { setEditingTranscriptId(capture.id); setTranscriptDraft(capture.text) }}>Edit text</button></p> : <button className="inline-link add-transcript" type="button" disabled={!!processing[capture.id]} onClick={() => { setEditingTranscriptId(capture.id); setTranscriptDraft('') }}>Add text to this recording</button>}
                               </div>
                             )}
-                            {captureTasks.length > 0 && <div className="linked-tasks">{captureTasks.map((task) => <TaskRow key={task.id} compact task={task} onToggle={(item) => void toggleTask(item)} onEdit={(item) => setEditor({ captureId: item.captureId, task: item })} />)}</div>}
+                            {localSaveFailures.has(capture.id) ? (
+                              <div className="ai-status">Recording is only in this open tab. <button className="inline-link" type="button" onClick={() => void retryLocalSave(capture)}>Retry local save</button></div>
+                            ) : (
+                              <div className="ai-status">
+                                {processing[capture.id] ? `${processing[capture.id] === 'transcribing' ? 'Transcribing' : 'Finding tasks'}…` : capture.aiStatus === 'needs-retry' ? 'AI needs retry.' : capture.aiStatus === 'ready' ? 'Ready' : capture.kind === 'voice' && !capture.text ? 'Saved here. Ready to transcribe.' : null}
+                                {!processing[capture.id] && capture.aiStatus !== 'ready' && <button className="inline-link" type="button" disabled={editingTranscriptId === capture.id} onClick={() => void processAi(capture)}>{capture.aiStatus === 'needs-retry' ? 'Retry AI' : capture.kind === 'voice' && !capture.text ? 'Transcribe' : 'Suggest tasks'}</button>}
+                              </div>
+                            )}
+                            {captureTasks.length > 0 && <div className="linked-tasks">{captureTasks.map((task) => task.suggestionStatus === 'suggested' ? (
+                              <div className="suggestion-row" key={task.id}>
+                                <div><span className="suggestion-tag">Suggested</span><span className="task-title">{task.title}</span>{(task.reminderAt || task.dueAt) && <span className="task-meta">{task.reminderAt && `Remind ${dateTimeLabel(task.reminderAt)}`}{task.dueAt && ` · Due ${dateTimeLabel(task.dueAt)}`}</span>}</div>
+                                <div className="suggestion-actions"><button className="inline-link" type="button" onClick={() => setEditor({ captureId: capture.id, task })}>Edit</button><button className="inline-link" type="button" onClick={() => void reviewSuggestion(task, 'accept')}>Accept</button><button className="inline-link" type="button" onClick={() => void reviewSuggestion(task, 'dismiss')}>Dismiss</button></div>
+                              </div>
+                            ) : <TaskRow key={task.id} compact task={task} onToggle={(item) => void toggleTask(item)} onEdit={(item) => setEditor({ captureId: item.captureId, task: item })} />)}</div>}
                             <button className="add-task-button" type="button" onClick={() => setEditor({ captureId: capture.id })}><Plus size={15} /> Add task</button>
                           </div>
                         </article>
@@ -443,11 +538,12 @@ export default function App() {
             <div className="composer-controls">
               <span className="composer-hint">Enter to send <span>·</span> Shift + Enter for a new line</span>
               <div className="composer-buttons">
+                <button className={`record-button ${voice.phase === 'recording' ? 'is-recording' : ''}`} type="button" disabled={loading || voice.phase === 'saving'} aria-label={voice.phase === 'recording' ? 'Recording; release to save' : 'Hold to record voice'} title="Hold to record voice" onPointerDown={(event) => { if (event.pointerType === 'mouse' && event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); void voice.start() }} onPointerUp={() => voice.stop()} onPointerCancel={() => voice.stop()} onKeyDown={(event) => { if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) { event.preventDefault(); void voice.start() } }} onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); voice.stop() } }} onClick={(event) => { if (event.detail === 0) { if (voice.phase === 'recording') voice.stop(); else void voice.start() } }}><Mic size={18} /></button>
                 <button className="send-button" type="button" onClick={() => void sendCapture()} disabled={!composer.trim() || loading} aria-label="Save capture"><ArrowUp size={19} strokeWidth={2.1} /></button>
               </div>
             </div>
           </div>
-          <div className="composer-foot">Only in this browser for now <span>⌘N to capture</span></div>
+          <div className="composer-foot"><span>{voice.error || (voice.phase === 'requesting' ? 'Allow microphone access…' : voice.phase === 'recording' ? 'Recording · release to save' : voice.phase === 'saving' ? 'Saving recording…' : 'Only in this browser for now')}</span><span>⌘N to capture</span></div>
         </div>
       </main>
 
