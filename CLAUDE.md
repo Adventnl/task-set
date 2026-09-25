@@ -1,0 +1,1 @@
+Follow [AGENTS.md](AGENTS.md) and [docs/engineering-rules.md](docs/engineering-rules.md) for every code change in this repository. Run `npm run validate` and report its result before claiming completion.

@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadData, saveCapture, saveTask, type Capture } from '../src/data'
+import { loadData, saveCapture, saveTask } from '../src/services/localDataService'
+import type { Capture } from '../src/shared/types/task'
 import { processCapture } from '../src/services/aiService'
 import { extractSuggestions, transcribeAudio } from '../src/connectors/aiConnector'
 

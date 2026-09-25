@@ -1,25 +1,4 @@
-export interface Capture {
-  id: string;
-  kind: 'text' | 'voice';
-  text: string;
-  createdAt: string;
-  audio?: Blob;
-  mimeType?: string;
-  aiStatus?: 'saved' | 'ready' | 'needs-retry';
-}
-
-export interface Task {
-  id: string;
-  captureId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  dueAt: string | null;
-  reminderAt: string | null;
-  pinned: boolean;
-  completedAt: string | null;
-  suggestionStatus?: 'suggested' | 'dismissed' | null;
-}
+import type { Capture, Task } from '../shared/types/task';
 
 const DATABASE_NAME = 'task-set';
 const DATABASE_VERSION = 1;

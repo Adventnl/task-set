@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "guardrails": "node scripts/guardrails.mjs",
     "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit && vitest run",
-    "validate": "npm run check && npm run build",
+    "validate": "npm run guardrails && npm run check && npm run build",
     "worker:dev": "wrangler dev",
     "worker:dry-run": "wrangler deploy --dry-run"
   },

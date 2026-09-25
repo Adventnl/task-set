@@ -1,10 +1,10 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
+import HomePage from './pages/home'
 import './styles.css'
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <HomePage />
   </React.StrictMode>
 )

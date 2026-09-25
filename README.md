@@ -6,6 +6,7 @@ The intended hosted address is `task.hanoryx.com`; the site has not been deploye
 
 - [Product and build plan](docs/plan.md)
 - [Mac-first design direction](docs/DESIGN.md)
+- [Engineering rules for AI and human changes](docs/engineering-rules.md)
 
 The core rule is local-first capture: a saved note or recording stays available even when a network or AI step fails. The original capture remains in the Feed while tasks can be edited independently. This build does not sync between devices; browser site data should be exported or synced before it is treated as a long-term archive.
 
@@ -30,4 +31,4 @@ The Worker source and bindings are in [`worker/`](worker/) and [`wrangler.jsonc`
 
 Before deploying, protect the site with a Cloudflare Access application and set `ACCESS_TEAM_DOMAIN` (for example, `https://your-team.cloudflareaccess.com`) and `ACCESS_AUD` as Worker secrets using `npx wrangler secret put`. The Worker validates the Access JWT itself and rejects AI requests without it. Verify the account, domain, Access policy, model usage budget, and microphone formats on the actual browsers before enabling the hosted endpoint. `npm run worker:dry-run` validates the bundle without deploying.
 
-Run `npm run validate` for the browser and Worker TypeScript checks, logic tests, and production build.
+Run `npm run validate` for source layout and import guardrails, browser and Worker TypeScript checks, logic tests, and the production build.

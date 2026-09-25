@@ -1,5 +1,6 @@
 import { extractSuggestions, transcribeAudio } from '../connectors/aiConnector'
-import { loadData, saveCapture, saveTask, type Capture, type Task } from '../data'
+import { loadData, saveCapture, saveTask } from './localDataService'
+import type { Capture, Task } from '../shared/types/task'
 
 export type ProcessingPhase = 'transcribing' | 'extracting'
 
@@ -12,29 +13,45 @@ function textFingerprint(text: string): string {
   return (hash >>> 0).toString(36)
 }
 
-export async function processCapture(capture: Capture, onPhase: (phase: ProcessingPhase) => void): Promise<{ capture: Capture; suggestions: Task[] }> {
+export async function processCapture(
+  capture: Capture,
+  onPhase: (phase: ProcessingPhase) => void,
+): Promise<{ capture: Capture; suggestions: Task[] }> {
   let current = capture
   if (current.kind === 'voice' && !current.text) {
-    if (!current.audio) throw new Error('The recording is missing from this browser.')
+    if (!current.audio)
+      throw new Error('The recording is missing from this browser.')
     onPhase('transcribing')
     const text = await transcribeAudio(current.audio)
     current = { ...current, text, aiStatus: 'saved' }
     await saveCapture(current)
   }
-  if (!current.text.trim()) throw new Error('Add a transcript before looking for tasks.')
+  if (!current.text.trim())
+    throw new Error('Add a transcript before looking for tasks.')
   onPhase('extracting')
   const suggestions = await extractSuggestions(current.text)
-  const existing = new Map((await loadData()).tasks.map((task) => [task.id, task]))
+  const existing = new Map(
+    (await loadData()).tasks.map((task) => [task.id, task]),
+  )
   const now = new Date().toISOString()
   const saved: Task[] = []
   for (const [index, suggestion] of suggestions.entries()) {
     const id = `${current.id}:suggestion:${textFingerprint(current.text)}:${index}`
     const prior = existing.get(id)
-    if (prior) { saved.push(prior); continue }
+    if (prior) {
+      saved.push(prior)
+      continue
+    }
     const task: Task = {
-      id, captureId: current.id, title: suggestion.title,
-      dueAt: suggestion.dueAt, reminderAt: suggestion.reminderAt,
-      pinned: false, completedAt: null, createdAt: now, updatedAt: now,
+      id,
+      captureId: current.id,
+      title: suggestion.title,
+      dueAt: suggestion.dueAt,
+      reminderAt: suggestion.reminderAt,
+      pinned: false,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
       suggestionStatus: 'suggested',
     }
     await saveTask(task)

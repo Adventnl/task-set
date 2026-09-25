@@ -2,6 +2,8 @@
 
 Production-quality, senior-engineer code: **correct, maintainable, modular, performant, and simple**. Optimize for correctness and long-term maintainability—not diff size, abstraction count, or feature count.
 
+These rules apply to every AI-assisted code change. AI agents must read this file at the start of work, apply the review rubric while coding, run `npm run validate`, and report any remaining limitation. The root `AGENTS.md` and `CLAUDE.md` point agents here; `npm run guardrails` enforces file placement and import direction. GitHub Actions runs the same validation on pushes and pull requests. A later cleanup run should find no avoidable structural drift.
+
 ## 1. Before Coding
 
 1. Understand the request and existing architecture.
@@ -59,14 +61,15 @@ src/
   pages/<route>/index.tsx
   pages/<route>/<Name>Screen.tsx
   services/<name>Service.ts
+  connectors/<name>Connector.ts
   shared/types/
   shared/utils/
   shared/hooks/
   shared/styles/
   shared/config/
-  router/routes.ts
-  router/index.ts
 ```
+
+The current single-page app uses `pages/home`, task components, `useTaskSet`, `localDataService`, and `aiConnector`. Add `router/` only when real URL routes are introduced; do not build routing for the four in-page views. `src/styles.css` is the existing global stylesheet.
 
 Rules:
 
@@ -77,12 +80,15 @@ Rules:
 * Dependencies point downward:
 
 ```text
-pages → components/services/shared/router
-components → components/shared/router
-services → services/shared
-shared → shared
-router → shared
+pages → pages (same route), components, shared/hooks, shared
+components → components, shared/hooks (types only), shared
+shared/hooks → services, shared
+services → services, connectors, shared
+connectors → shared
+shared/types|utils|styles|config → shared
 ```
+
+Import a hook from a component only for its TypeScript return type; components receive data and callbacks as props. Run `npm run guardrails` after file moves and before submitting code. Update the gate when the approved structure changes.
 
 ### Data Flow
 
@@ -339,18 +345,13 @@ edge cases
 error cases
 ```
 
-Required project gates:
+Required project gate:
 
 ```bash
 npm run validate
 ```
 
-or:
-
-```bash
-npm run check
-npm run build:weapp
-```
+This runs `guardrails`, browser and Worker typechecks, Vitest, and the Vite production build. The project has no separate lint script; do not claim one passed. Run the relevant Worker bundle check when Worker code or config changes.
 
 Never claim success when a gate fails. Report the exact command and result.
 
