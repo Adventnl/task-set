@@ -1,34 +1,46 @@
 /*
- * Task Set design system. Tokens first; every component rule below uses them.
+ * Task Set design system: a quiet notes app on a blank page. Tokens first; every rule below uses them.
  * Each color is written once as light-dark(light, dark). The page follows the system setting
  * unless Settings fixes an appearance, which sets data-theme on <html>.
  */
 :root {
   color-scheme: light dark;
-  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 
-  --canvas: light-dark(#fbfbfa, #161618);
-  --surface: light-dark(#ffffff, #1f1f22);
-  --surface-hover: light-dark(#f2f2f0, #28282c);
-  --surface-selected: light-dark(#ebebe8, #2e2e33);
-  --text: light-dark(#1d1d1f, #ededf0);
-  --text-secondary: light-dark(#56585e, #b4b4ba);
-  --text-muted: light-dark(#6c6f75, #9b9ba2);
-  --line: light-dark(#e7e6e3, #2c2c31);
-  --line-strong: light-dark(#d4d3cf, #3b3b41);
-  --accent: light-dark(#2459c4, #7aa7ff);
-  --accent-hover: light-dark(#1c4aa6, #9dbdff);
-  --accent-soft: light-dark(#ebf1fc, #1c2940);
-  --accent-soft-hover: light-dark(#dce7fa, #243452);
-  --on-accent: light-dark(#ffffff, #0c1526);
+  /* Paper and ink */
+  --canvas: light-dark(#fdfcfa, #1b1b1d);
+  --sidebar: light-dark(#f5f4f0, #222224);
+  --surface: light-dark(#ffffff, #29292c);
+  --surface-hover: light-dark(#efede8, #303034);
+  --surface-selected: light-dark(#e8e5dd, #38383d);
+  --text: light-dark(#1d1c1a, #eeede9);
+  --text-secondary: light-dark(#57544d, #bdbab3);
+  --text-muted: light-dark(#6e6a62, #9e9b94);
+  --line: light-dark(#eceae4, #2c2c30);
+  --line-strong: light-dark(#dcd8cf, #3d3d42);
+  /* Borders that identify a control, such as an empty checkbox: at least 3:1 against the page. */
+  --control-border: light-dark(#8c877d, #75726c);
+
+  /* One amber accent. `--accent` is for text, icons, and focus; `--accent-fill` sits behind dark ink. */
+  --accent: light-dark(#8f5f00, #f2c14e);
+  --accent-fill: #f2b400;
+  --accent-fill-hover: light-dark(#e2a800, #f6c535);
+  --on-accent: #1d1c1a;
+  --accent-soft: light-dark(#fcf1d2, #3a3222);
+  --accent-soft-hover: light-dark(#f8e6b2, #473d27);
+
   --danger: light-dark(#b3261e, #ff8f86);
   --danger-soft: light-dark(#fcebea, #3b1f1d);
   --recording: light-dark(#c9352b, #ff6b60);
   --status-good: light-dark(#2f8a55, #5cc58a);
   --status-wait: light-dark(#a8741a, #e0ad4f);
-  --backdrop: light-dark(rgb(20 20 22 / 0.32), rgb(0 0 0 / 0.55));
-  --shadow-float: 0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.3)), 0 6px 20px light-dark(rgb(0 0 0 / 0.06), transparent);
-  --shadow-dialog: 0 24px 60px light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.5));
+  --toast-bg: light-dark(#1d1c1a, #eeede9);
+  --toast-text: light-dark(#fdfcfa, #1d1c1a);
+  --toast-action: light-dark(#f2c14e, #8f5f00);
+  --backdrop: light-dark(rgb(29 28 26 / 0.28), rgb(0 0 0 / 0.55));
+  --shadow-float: 0 1px 2px light-dark(rgb(40 30 10 / 0.05), rgb(0 0 0 / 0.3)), 0 8px 24px light-dark(rgb(40 30 10 / 0.06), rgb(0 0 0 / 0.3));
+  --shadow-dialog: 0 24px 64px light-dark(rgb(40 30 10 / 0.16), rgb(0 0 0 / 0.55));
 
   --space-1: 4px;
   --space-2: 8px;
@@ -37,25 +49,33 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
+  --space-8: 64px;
 
   --text-xs: 12px;
   --text-sm: 13px;
   --text-md: 15px;
-  --text-lg: 17px;
-  --text-xl: 26px;
+  --text-body: 16px;
+  --text-note: 17px;
+  --text-lg: 18px;
+  --text-xl: 32px;
 
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
 
   --touch: 44px;
   --control: 36px;
-  --rail-width: 220px;
-  --column: 680px;
-  --gutter: var(--space-5);
+  --check: 20px;
+  /* Height of the time line above a note; its ⋯ and selection circle center on it. */
+  --meta-row: 24px;
+  --rail-width: 232px;
+  --column: 720px;
+  --gutter: var(--space-6);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 120ms;
+  --medium: 180ms;
 
   font-family: var(--font);
   font-size: var(--text-md);
@@ -179,7 +199,7 @@ legend {
   font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
-  transition: background-color var(--fast) ease, border-color var(--fast) ease;
+  transition: background-color var(--fast) ease, border-color var(--fast) ease, color var(--fast) ease;
 }
 
 .button-small {
@@ -192,12 +212,12 @@ legend {
 }
 
 .button-primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 .button-secondary {
@@ -211,7 +231,7 @@ legend {
 
 .button-soft {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--text);
 }
 
 .button-soft:hover:not(:disabled) {
@@ -256,6 +276,10 @@ legend {
   color: var(--text);
 }
 
+.icon-button-small {
+  width: var(--control);
+  height: var(--control);
+}
 
 .link-button {
   min-height: var(--control);
@@ -286,7 +310,7 @@ legend {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   background: var(--surface);
-  font-size: var(--text-md);
+  font-size: var(--text-body);
 }
 
 .text-field:focus {
@@ -307,7 +331,7 @@ legend {
   width: 18px;
   height: 18px;
   margin: 0;
-  accent-color: var(--accent);
+  accent-color: var(--accent-fill);
 }
 
 .form-error {
@@ -325,11 +349,13 @@ legend {
 }
 
 .rail {
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
   padding: var(--space-5) var(--space-3) var(--space-4);
   border-right: 1px solid var(--line);
+  background: var(--sidebar);
 }
 
 .brand {
@@ -353,13 +379,9 @@ legend {
 }
 
 .brand-mark-large {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-lg);
-}
-
-.rail-footer {
-  margin-top: auto;
 }
 
 .view-nav-rail {
@@ -367,11 +389,12 @@ legend {
   gap: 2px;
 }
 
-.view-nav-item {
-  min-height: max(40px, var(--control));
+.view-nav-item,
+.rail-install {
+  min-height: max(38px, var(--control));
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
   padding: 0 var(--space-3);
   border: 0;
   border-radius: var(--radius-md);
@@ -380,15 +403,17 @@ legend {
   font-size: 14px;
   font-weight: 500;
   text-align: left;
+  transition: background-color var(--fast) ease, color var(--fast) ease;
 }
 
-.view-nav-item:hover {
+.view-nav-item:hover,
+.rail-install:hover {
   background: var(--surface-hover);
   color: var(--text);
 }
 
 .view-nav-item[aria-current='page'] {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
   color: var(--text);
   font-weight: 600;
 }
@@ -398,7 +423,8 @@ legend {
   color: var(--text-muted);
 }
 
-.view-nav-item[aria-current='page'] .view-nav-icon {
+.view-nav-item[aria-current='page'] .view-nav-icon,
+.rail-install svg {
   color: var(--accent);
 }
 
@@ -412,6 +438,12 @@ legend {
 .view-nav-tabs,
 .mobile-only {
   display: none;
+}
+
+.rail-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 2px;
 }
 
 .sync-status {
@@ -470,16 +502,17 @@ legend {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--canvas);
 }
 
 .workspace-header {
   width: min(100% - 2 * var(--gutter), var(--column));
   margin: 0 auto;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-6) 0 var(--space-4);
+  padding: var(--space-7) 0 var(--space-4);
 }
 
 .workspace-title {
@@ -487,10 +520,11 @@ legend {
 }
 
 .workspace-title h1 {
+  font-family: var(--font-display);
   font-size: var(--text-xl);
   font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
 
 .workspace-title p {
@@ -506,25 +540,26 @@ legend {
 }
 
 .workspace-tools .icon-button[aria-pressed='true'] {
-  background: var(--surface-selected);
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
 .search-field {
   width: min(280px, 60vw);
-  min-height: var(--touch);
+  min-height: var(--control);
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding-left: var(--space-3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
   color: var(--text-muted);
 }
 
 .search-field:focus-within {
   border-color: var(--accent);
+  background: var(--surface);
   box-shadow: 0 0 0 3px var(--accent-soft-hover);
 }
 
@@ -540,6 +575,12 @@ legend {
 
 .search-field input::-webkit-search-cancel-button {
   display: none;
+}
+
+.search-field .icon-button {
+  width: var(--control);
+  height: var(--control);
+  border-radius: var(--radius-pill);
 }
 
 .workspace-scroll {
@@ -577,8 +618,8 @@ legend {
 }
 
 .empty-state {
-  max-width: 440px;
-  padding: var(--space-7) 0;
+  max-width: 420px;
+  padding: var(--space-8) 0;
 }
 
 .empty-state h2 {
@@ -589,11 +630,11 @@ legend {
 .empty-state p {
   margin-top: var(--space-2);
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-md);
   line-height: 1.6;
 }
 
-/* ---------- Feed ---------- */
+/* ---------- Notes ---------- */
 
 .feed-day + .feed-day {
   margin-top: var(--space-5);
@@ -604,21 +645,23 @@ legend {
   top: 0;
   z-index: 1;
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--line);
   background: var(--canvas);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   font-weight: 650;
-  letter-spacing: 0.02em;
 }
 
 .capture {
   padding: var(--space-3) 0 var(--space-4);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+}
+
+.day-label + .capture {
+  border-top: 0;
 }
 
 .capture-head {
-  min-height: 28px;
+  min-height: var(--meta-row);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -636,7 +679,7 @@ legend {
 .capture-more {
   width: var(--control);
   height: var(--control);
-  margin: calc((28px - var(--control)) / 2) calc(-1 * var(--space-2)) calc((28px - var(--control)) / 2) auto;
+  margin: calc((var(--meta-row) - var(--control)) / 2) calc(-1 * var(--space-2)) calc((var(--meta-row) - var(--control)) / 2) auto;
   opacity: 0;
 }
 
@@ -660,12 +703,8 @@ legend {
 }
 
 .select-check {
-  /* Centers the box on the 28px time row above the message. */
-  margin-top: calc((28px - var(--touch)) / 2);
-}
-
-.select-check .task-check-box {
-  border-radius: 50%;
+  /* Centers the circle on the time line above the note. */
+  margin-top: calc((var(--meta-row) - var(--touch)) / 2);
 }
 
 .capture.is-selectable:hover .select-check .task-check-box {
@@ -673,23 +712,24 @@ legend {
 }
 
 .select-check[aria-checked='true'] .task-check-box {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
 }
 
 .capture-main {
   min-width: 0;
 }
 
-/* Suggestions and tasks cannot be used while selecting, so they recede behind the message. */
+/* Suggestions and tasks cannot be used while selecting, so they recede behind the note. */
 .capture.is-selectable .capture-extras {
   opacity: 0.55;
 }
 
 .capture-text {
+  margin-top: 2px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: var(--text-md);
+  font-size: var(--text-note);
   line-height: 1.6;
 }
 
@@ -745,7 +785,7 @@ legend {
 }
 
 .suggestion + .suggestion {
-  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .suggestion-main {
@@ -755,7 +795,7 @@ legend {
 }
 
 .suggestion-title {
-  font-size: var(--text-md);
+  font-size: var(--text-body);
   font-weight: 550;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -774,15 +814,16 @@ legend {
 
 .suggestion .button-soft {
   background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
 
 .suggestion .button-soft:hover:not(:disabled) {
   background: var(--canvas);
 }
 
-.icon-button-small {
-  width: var(--control);
-  height: var(--control);
+.suggestion .button-quiet:hover:not(:disabled),
+.suggestion .icon-button:hover {
+  background: var(--accent-soft-hover);
 }
 
 .feed-end {
@@ -792,26 +833,24 @@ legend {
 /* ---------- Tasks ---------- */
 
 .task-section + .task-section {
-  margin-top: var(--space-5);
+  margin-top: var(--space-6);
 }
 
 .section-label {
   padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--line);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
   font-weight: 650;
-  letter-spacing: 0.02em;
 }
 
 .task-row {
   display: flex;
   align-items: flex-start;
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
 }
 
 .task-row-linked {
-  border-bottom: 0;
+  border-top: 0;
 }
 
 .task-check {
@@ -828,22 +867,23 @@ legend {
 }
 
 .task-check-box {
-  width: 20px;
-  height: 20px;
+  width: var(--check);
+  height: var(--check);
   display: grid;
   place-items: center;
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--control-border);
+  border-radius: 50%;
   transition: background-color var(--fast) ease, border-color var(--fast) ease;
 }
 
 .task-check:hover .task-check-box {
   border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .is-done .task-check-box {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
 }
 
 .task-body {
@@ -861,7 +901,7 @@ legend {
 }
 
 .task-title {
-  font-size: var(--text-md);
+  font-size: var(--text-body);
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -917,10 +957,74 @@ legend {
   font-weight: 600;
 }
 
+/* ---------- Archive ---------- */
+
+.archive-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.archive-row {
+  min-height: calc(var(--touch) + var(--space-3));
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.archive-check {
+  width: var(--check);
+  height: var(--check);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-selected);
+  color: var(--text-muted);
+}
+
+.archive-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.archive-title {
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
+}
+
+.archive-meta {
+  margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-meta > span {
+  white-space: nowrap;
+}
+
+.archive-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: calc(-1 * var(--space-2));
+}
+
 /* ---------- Composer ---------- */
 
-.composer-dock,
-.selection-dock {
+.dock {
+  position: relative;
   width: min(100% - 2 * var(--gutter), var(--column));
   margin: 0 auto;
   padding: var(--space-2) 0 max(var(--space-4), env(safe-area-inset-bottom));
@@ -932,14 +1036,15 @@ legend {
   gap: var(--space-2);
   padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: 26px;
   background: var(--surface);
   box-shadow: var(--shadow-float);
-  transition: border-color var(--fast) ease;
+  transition: border-color var(--fast) ease, box-shadow var(--fast) ease;
 }
 
 .composer:focus-within {
   border-color: var(--accent);
+  box-shadow: var(--shadow-float), 0 0 0 3px var(--accent-soft);
 }
 
 .composer.is-talking {
@@ -957,8 +1062,8 @@ legend {
   outline: 0;
   resize: none;
   background: transparent;
-  font-size: var(--text-md);
-  line-height: 1.45;
+  font-size: var(--text-body);
+  line-height: 1.4;
 }
 
 .composer textarea::placeholder,
@@ -974,13 +1079,17 @@ legend {
   gap: var(--space-1);
 }
 
+.dictation .icon-button {
+  border-radius: 50%;
+}
+
 .dictation-text {
   flex: 1;
   max-height: 200px;
   overflow-y: auto;
   padding: 11px 0;
-  font-size: var(--text-md);
-  line-height: 1.45;
+  font-size: var(--text-body);
+  line-height: 1.4;
 }
 
 .send-button,
@@ -991,15 +1100,15 @@ legend {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--accent);
+  border-radius: 50%;
+  background: var(--accent-fill);
   color: var(--on-accent);
   transition: background-color var(--fast) ease, transform var(--fast) var(--ease);
 }
 
 .send-button:hover,
 .talk-button:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill-hover);
 }
 
 .talk-button {
@@ -1011,6 +1120,7 @@ legend {
 
 .talk-button.is-active {
   background: var(--recording);
+  color: var(--surface);
   transform: scale(1.08);
   animation: listening 1.4s ease-out infinite;
 }
@@ -1034,9 +1144,13 @@ legend {
   gap: var(--space-1);
   padding: var(--space-1);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xl);
+  border-radius: 26px;
   background: var(--surface);
   box-shadow: var(--shadow-float);
+}
+
+.selection-bar > .icon-button {
+  border-radius: 50%;
 }
 
 .selection-count {
@@ -1052,28 +1166,15 @@ legend {
 
 .selection-bar .button {
   min-height: var(--touch);
+  border-radius: var(--radius-pill);
 }
 
 .composer-hint,
 .selection-hint {
-  min-height: 20px;
   margin-top: var(--space-2);
   padding: 0 var(--space-4);
   color: var(--text-muted);
   font-size: var(--text-xs);
-}
-
-.hint-coarse {
-  display: none;
-}
-
-@media (pointer: coarse) {
-  .hint-fine {
-    display: none;
-  }
-  .hint-coarse {
-    display: inline;
-  }
 }
 
 .composer-error {
@@ -1085,6 +1186,64 @@ legend {
   padding: 0 var(--space-4);
   color: var(--danger);
   font-size: var(--text-sm);
+}
+
+/* Floats above the composer, so it never moves the notes underneath. */
+.toast {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  box-shadow: var(--shadow-dialog);
+  animation: toast-in var(--medium) var(--ease);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.toast-text {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toast-action {
+  min-height: var(--control);
+  flex: none;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--toast-action);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.toast-action:hover,
+.toast .icon-button:hover {
+  background: color-mix(in srgb, var(--toast-text) 12%, transparent);
+}
+
+.toast .icon-button {
+  border-radius: 50%;
+  color: inherit;
 }
 
 /* ---------- Dialogs ---------- */
@@ -1202,7 +1361,9 @@ legend {
 .editor-source {
   margin: 0 0 var(--space-4);
   padding: var(--space-2) var(--space-3);
-  border-left: 2px solid var(--line-strong);
+  border-left: 3px solid var(--accent-fill);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--canvas);
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
@@ -1233,6 +1394,7 @@ legend {
   display: grid;
   place-items: center;
   padding: var(--space-5);
+  background: var(--canvas);
 }
 
 .sign-in-form {
@@ -1243,8 +1405,9 @@ legend {
 
 .sign-in-form h1 {
   margin-top: var(--space-4);
+  font-family: var(--font-display);
   font-size: var(--text-xl);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
 .sign-in-form > p {
@@ -1261,6 +1424,7 @@ legend {
 @media (max-width: 760px) {
   :root {
     --gutter: var(--space-4);
+    --text-xl: 28px;
   }
 
   .app {
@@ -1277,15 +1441,7 @@ legend {
 
   .workspace-header {
     align-items: center;
-    padding: max(var(--space-3), env(safe-area-inset-top)) 0 var(--space-1);
-  }
-
-  .workspace-title h1 {
-    font-size: 22px;
-  }
-
-  .workspace-title p {
-    display: none;
+    padding: max(var(--space-4), env(safe-area-inset-top)) 0 var(--space-3);
   }
 
   .sync-status-compact .sync-label {
@@ -1314,22 +1470,25 @@ legend {
   }
 
   .view-nav-tabs {
-    display: flex;
-    gap: var(--space-1);
-    padding: 0 var(--gutter);
-    border-bottom: 1px solid var(--line);
-    overflow-x: auto;
-    scrollbar-width: none;
+    width: min(100% - 2 * var(--gutter), var(--column));
+    margin: 0 auto var(--space-2);
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 2px;
+    padding: 2px;
+    border-radius: var(--radius-md);
+    background: var(--surface-hover);
   }
 
   .view-nav-tabs .view-nav-item {
-    min-height: var(--touch);
-    flex: none;
+    min-height: var(--control);
+    justify-content: center;
     gap: var(--space-1);
-    padding: 0 var(--space-3);
-    border-radius: 0;
-    background: transparent;
-    box-shadow: inset 0 -2px transparent;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    font-weight: 600;
   }
 
   .view-nav-tabs .view-nav-icon {
@@ -1337,11 +1496,12 @@ legend {
   }
 
   .view-nav-tabs .view-nav-item[aria-current='page'] {
-    box-shadow: inset 0 -2px var(--accent);
+    background: var(--surface);
+    box-shadow: var(--shadow-float), inset 0 0 0 1px var(--line-strong);
   }
 
   .view-nav-tabs .view-nav-count {
-    margin-left: 2px;
+    margin-left: 0;
   }
 
   .modal {
@@ -1366,14 +1526,16 @@ legend {
   }
 }
 
-/* The smallest phones keep the count readable by showing Delete as its icon alone. */
+/* The smallest phones keep labels readable by showing some actions as icons alone. */
 @media (max-width: 380px) {
   .selection-delete {
     width: var(--touch);
     padding: 0;
   }
 
-  .selection-delete-label {
+  .selection-delete-label,
+  .archive-action-label,
+  .view-nav-tabs .view-nav-count {
     display: none;
   }
 }

@@ -2,7 +2,7 @@ import type { Task } from '../../../shared/types/task'
 import type { TaskSection } from '../../../shared/utils/taskView'
 import TaskRow from '../TaskRow'
 
-/** The Tasks view: pinned, no date, scheduled, and done today, each under its own heading. */
+/** The Tasks view: open tasks under Pinned, No date, and Scheduled. */
 export default function TaskList({
   sections,
   onToggle,
@@ -17,8 +17,8 @@ export default function TaskList({
   if (!sections.length) {
     return (
       <div className="empty-state">
-        <h2>No tasks yet</h2>
-        <p>Create a task from a message in the Feed. Tasks without a date come first, then dated ones, soonest first. Pin a task to keep it on top.</p>
+        <h2>Nothing to do</h2>
+        <p>Create a task from a suggestion under a note, or from a note’s ⋯ menu. Completing a task moves it to the Archive.</p>
       </div>
     )
   }

@@ -1,7 +1,7 @@
 import { requestTaskRetry } from '../connectors/aiConnector'
 import type { SyncRecord } from '../shared/types/sync'
 import type { Capture, Editor, Task, TaskInput } from '../shared/types/task'
-import { taskFromEditor } from '../shared/utils/taskView'
+import { expiredTasks, taskFromEditor } from '../shared/utils/taskView'
 import { createId, saveLocal } from './localDataService'
 
 // Every operation saves on this device first and returns the changed records;
@@ -48,9 +48,18 @@ export function deleteTask(task: Task): Promise<SyncRecord[]> {
   return save([taskRecord({ ...task, deletedAt: now, updatedAt: now })])
 }
 
+/** Completing a task moves it to the Archive; reopening restores it to Tasks. */
 export function setTaskCompleted(task: Task, completed: boolean): Promise<SyncRecord[]> {
   const now = new Date().toISOString()
   return save([taskRecord({ ...task, completedAt: completed ? now : null, updatedAt: now })])
+}
+
+/** Deletes archived tasks whose retention has ended. Saves nothing when none have. */
+export async function purgeExpiredTasks(tasks: Task[], now = new Date()): Promise<SyncRecord[]> {
+  const expired = expiredTasks(tasks, now)
+  if (!expired.length) return []
+  const at = now.toISOString()
+  return save(expired.map((task) => taskRecord({ ...task, deletedAt: at, updatedAt: at })))
 }
 
 export function setTaskPinned(task: Task, pinned: boolean): Promise<SyncRecord[]> {

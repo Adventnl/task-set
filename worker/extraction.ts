@@ -45,11 +45,17 @@ const SCHEMA = {
 }
 
 /**
- * Asks Workers AI for task suggestions in a capture. When that call fails, for example after the
- * daily free allocation is used up, OpenRouter answers instead. Throws when both fail or the
- * output is invalid.
+ * The OpenRouter fallback is off unless this optional secret is set (`wrangler secret put
+ * OPENROUTER_API_KEY`), so it is not part of the generated `Env` type.
  */
-export async function extractSuggestions(env: Pick<Env, 'AI' | 'OPENROUTER_API_KEY'>, capture: Capture): Promise<Suggestion[]> {
+type ExtractionEnv = Pick<Env, 'AI'> & { OPENROUTER_API_KEY?: string }
+
+/**
+ * Asks Workers AI for task suggestions in a capture. When that call fails, for example after the
+ * daily free allocation is used up, OpenRouter answers instead if its key is set. Throws when no
+ * model answers or the output is invalid.
+ */
+export async function extractSuggestions(env: ExtractionEnv, capture: Capture): Promise<Suggestion[]> {
   const messages: ChatMessage[] = [
     { role: 'system', content: INSTRUCTIONS },
     {
@@ -71,6 +77,7 @@ export async function extractSuggestions(env: Pick<Env, 'AI' | 'OPENROUTER_API_K
     })
     answer = result.response
   } catch (error) {
+    if (!env.OPENROUTER_API_KEY) throw error
     const message = error instanceof Error ? error.message : String(error)
     console.warn(JSON.stringify({ event: 'workers_ai_failed', fallback: 'openrouter', message }))
     answer = await openRouterStructuredChat(env.OPENROUTER_API_KEY, { model: FALLBACK_MODEL, messages, schema: SCHEMA, maxTokens: MAX_TOKENS })

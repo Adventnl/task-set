@@ -1,6 +1,6 @@
 import { Trash2, X } from 'lucide-react'
 
-/** Takes the composer's place while Feed messages are being selected for deletion. */
+/** Takes the composer's place while notes are being selected for deletion. */
 export default function SelectionBar({
   count,
   allSelected,
@@ -26,12 +26,12 @@ export default function SelectionBar({
         <button className="button button-quiet button-small" type="button" onClick={onToggleAll}>
           {allSelected ? 'Deselect all' : 'Select all'}
         </button>
-        <button className="button button-danger button-small selection-delete" type="button" onClick={onDelete} disabled={!count} aria-label="Delete selected messages">
+        <button className="button button-danger button-small selection-delete" type="button" onClick={onDelete} disabled={!count} aria-label="Delete selected notes">
           <Trash2 size={15} aria-hidden="true" />
           <span className="selection-delete-label">Delete</span>
         </button>
       </div>
-      <p className="selection-hint">Choose the messages to delete. Tasks made from them are deleted too.</p>
+      <p className="selection-hint">Choose the notes to delete. Tasks made from them are deleted too.</p>
     </div>
   )
 }

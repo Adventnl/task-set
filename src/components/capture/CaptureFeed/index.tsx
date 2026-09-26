@@ -5,7 +5,7 @@ import CaptureRow, { type CaptureActions } from '../CaptureRow'
 
 const STICK_DISTANCE = 160
 
-/** The chronological Feed. Keeps the newest message in view unless the reader has scrolled back. */
+/** Notes in the order they were written. Keeps the newest note in view unless the reader has scrolled back. */
 export default function CaptureFeed({
   days,
   tasksByCapture,
@@ -25,7 +25,7 @@ export default function CaptureFeed({
   const endRef = useRef<HTMLDivElement>(null)
   const nearEnd = useRef(true)
   const last = days.at(-1)?.captures.at(-1)
-  // Changes when the newest message, its AI state, or its tasks change.
+  // Changes when the newest note, its AI state, or its tasks change.
   const tailKey = last ? `${last.id}:${last.ai}:${tasksByCapture.get(last.id)?.length ?? 0}` : ''
 
   useEffect(() => {
@@ -39,18 +39,18 @@ export default function CaptureFeed({
   }, [scrollRef])
 
   useLayoutEffect(() => {
-    // A message just written on this device (not yet synced) always scrolls into view.
+    // A note just written on this device (not yet synced) always scrolls into view.
     if (!search && (nearEnd.current || last?.ai === null)) endRef.current?.scrollIntoView({ block: 'end' })
   }, [tailKey, search, last?.ai])
 
   if (!days.length) {
     return (
       <div className="empty-state">
-        <h2>{search ? `Nothing matches “${search}”` : 'Say it or type it'}</h2>
+        <h2>{search ? `Nothing matches “${search}”` : 'A blank page'}</h2>
         <p>
           {search
-            ? 'Try another word from a message or task.'
-            : 'Hold the microphone and talk, or type below. Task Set suggests tasks from what you say, and you decide what to keep.'}
+            ? 'Try another word from a note or task.'
+            : 'Write a note below, or hold the microphone and talk. Task Set suggests tasks from what you write, and you decide what to keep.'}
         </p>
       </div>
     )

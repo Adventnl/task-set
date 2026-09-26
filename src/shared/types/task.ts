@@ -27,7 +27,8 @@ export interface Task {
   suggestionStatus: 'suggested' | 'dismissed' | null
 }
 
-export type View = 'feed' | 'tasks'
+/** `feed` is the Notes view; `archive` holds completed tasks until they expire. */
+export type View = 'feed' | 'tasks' | 'archive'
 export type Editor = { captureId: string; task?: Task }
 export type TaskInput = {
   title: string

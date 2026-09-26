@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Capture, Editor, Task, View } from '../types/task'
 import { VIEW_LABELS } from '../config/views'
-import { dayKey, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
+import { archivedTasks, dayKey, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 
 const CLOCK_MS = 60_000
 const NO_SELECTION: ReadonlySet<string> = new Set()
@@ -17,7 +17,7 @@ export interface Confirmation {
   onConfirm: () => Promise<unknown>
 }
 
-/** Which view and dialog are open, search, Feed selection, keyboard shortcuts, and the lists they derive. */
+/** Which view and dialog are open, search, note selection, keyboard shortcuts, and the lists they derive. */
 export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
   const [view, setView] = useState<View>('feed')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -29,7 +29,7 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  // Changes only when the date does, so day labels and Done today roll over after midnight.
+  // Changes only when the date does, so day labels and Archive countdowns roll over after midnight.
   const [today, setToday] = useState(() => dayKey(new Date().toISOString()))
 
   useEffect(() => {
@@ -97,9 +97,11 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
   // Only messages still on screen count, so a search or another device's deletion never widens a delete.
   const selectedCaptures = useMemo(() => feed.captures.filter((capture) => selectedIds.has(capture.id)), [feed, selectedIds])
   const allSelected = feed.captures.length > 0 && selectedCaptures.length === feed.captures.length
-  const sections = useMemo(() => (view === 'tasks' ? taskSections(tasks) : []), [tasks, view, today])
+  const sections = useMemo(() => (view === 'tasks' ? taskSections(tasks) : []), [tasks, view])
+  const archive = useMemo(() => archivedTasks(tasks), [tasks, today])
   const taskCount = useMemo(() => openTaskCount(tasks), [tasks])
-  const detail = viewDetail(view, search.trim() ? feed.matchCount : null)
+  const counts: Record<View, number> = { feed: captures.length, tasks: taskCount, archive: archive.length }
+  const detail = viewDetail(view, { notes: captures.length, openTasks: taskCount, matches: search.trim() ? feed.matchCount : null })
 
   return {
     view,
@@ -131,6 +133,7 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
     searchRef,
     feed,
     sections,
-    taskCount,
+    archive,
+    counts,
   }
 }

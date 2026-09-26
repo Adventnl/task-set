@@ -21,7 +21,8 @@ function talkHint(phase: Phase, handsFree: boolean): string {
 }
 
 /**
- * Type or talk. Enter sends; the microphone sends what it hears when you let go.
+ * Write or talk. Enter sends and Shift+Enter adds a line; the microphone sends what it hears when
+ * you let go, or keeps listening hands-free after a tap.
  * While `hidden`, it keeps the unsent draft and never leaves the microphone listening.
  */
 export default function Composer({
@@ -90,8 +91,8 @@ export default function Composer({
                 void send()
               }
             }}
-            placeholder="Type a thought, or hold the mic to talk"
-            aria-label="New message"
+            placeholder="Write a note…"
+            aria-label="New note"
             enterKeyHint="send"
           />
         )}
@@ -111,16 +112,7 @@ export default function Composer({
           />
         )}
       </div>
-      <p className="composer-hint">
-        {talking ? (
-          talkHint(dictation.phase, handsFree)
-        ) : (
-          <>
-            <span className="hint-fine">Enter to send · Shift+Enter for a new line · Hold the mic to talk</span>
-            <span className="hint-coarse">Hold the mic to talk, or tap it to talk hands-free</span>
-          </>
-        )}
-      </p>
+      {talking && <p className="composer-hint">{talkHint(dictation.phase, handsFree)}</p>}
     </div>
   )
 }

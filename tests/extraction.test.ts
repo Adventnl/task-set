@@ -14,8 +14,8 @@ const answer = {
 }
 const expected = [{ title: 'Email Sam', dueAt: null, reminderAt: null }]
 
-function env(run: () => Promise<unknown>) {
-  return { AI: { run: vi.fn(run) }, OPENROUTER_API_KEY: 'test-key' } as unknown as Pick<Env, 'AI' | 'OPENROUTER_API_KEY'>
+function env(run: () => Promise<unknown>, secrets: { OPENROUTER_API_KEY?: string } = { OPENROUTER_API_KEY: 'test-key' }) {
+  return { AI: { run: vi.fn(run) }, ...secrets } as unknown as Pick<Env, 'AI'> & { OPENROUTER_API_KEY?: string }
 }
 
 afterEach(() => {
@@ -45,6 +45,16 @@ describe('task extraction', () => {
     expect(body.model).toBe('meta-llama/llama-4-scout')
     expect(body.response_format.type).toBe('json_schema')
     expect(body.provider).toEqual({ require_parameters: true })
+  })
+
+  it('does not call OpenRouter when its key is not set, so the capture is retried', async () => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    const noKey = env(async () => {
+      throw new Error('Workers AI is unavailable')
+    }, {})
+    await expect(extractSuggestions(noKey, capture)).rejects.toThrow('Workers AI is unavailable')
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('fails when both Workers AI and OpenRouter fail, so the capture is retried', async () => {

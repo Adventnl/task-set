@@ -1,22 +1,25 @@
-import { Check } from 'lucide-react'
+import { Check, Download } from 'lucide-react'
 import type { SyncStatus as Status } from '../../../shared/types/sync'
 import type { View } from '../../../shared/types/task'
 import SyncStatus from '../SyncStatus'
 import ViewNavigation from '../ViewNavigation'
 
-/** Desktop side rail: brand, views, and the sync state that opens settings. Hidden on narrow screens. */
+/** Desktop sidebar: brand, views, installing, and the sync state that opens settings. Hidden on narrow screens. */
 export default function NavigationRail({
   view,
-  taskCount,
+  counts,
   status,
   onSelect,
   onOpenSettings,
+  onInstall,
 }: {
   view: View
-  taskCount: number
+  counts: Record<View, number>
   status: Status
   onSelect: (view: View) => void
   onOpenSettings: () => void
+  /** Present only while the browser offers to install Task Set. */
+  onInstall?: () => void
 }) {
   return (
     <aside className="rail">
@@ -26,8 +29,14 @@ export default function NavigationRail({
         </span>
         Task Set
       </div>
-      <ViewNavigation view={view} taskCount={taskCount} variant="rail" onSelect={onSelect} />
+      <ViewNavigation view={view} counts={counts} variant="rail" onSelect={onSelect} />
       <div className="rail-footer">
+        {onInstall && (
+          <button className="rail-install" type="button" onClick={onInstall}>
+            <Download size={16} aria-hidden="true" />
+            Install app
+          </button>
+        )}
         <SyncStatus status={status} onOpen={onOpenSettings} />
       </div>
     </aside>

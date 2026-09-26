@@ -1,9 +1,16 @@
+import { ARCHIVE_DAYS } from '../config/archive'
 import type { Capture, Editor, Task, TaskInput, View } from '../types/task'
 
 export interface TaskSection {
-  id: 'pinned' | 'undated' | 'scheduled' | 'done'
+  id: 'pinned' | 'undated' | 'scheduled'
   label: string
   tasks: Task[]
+}
+
+export interface ArchivedTask {
+  task: Task & { completedAt: string }
+  /** Whole days until it is deleted for good; at least 1. */
+  daysLeft: number
 }
 
 export interface CaptureDay {
@@ -83,6 +90,15 @@ function isOpen(task: Task): boolean {
   return !task.completedAt && !task.suggestionStatus
 }
 
+/** Completing a task archives it. */
+function isArchived(task: Task): task is Task & { completedAt: string } {
+  return !!task.completedAt && !task.suggestionStatus
+}
+
+function archiveExpiry(task: Task & { completedAt: string }): number {
+  return Date.parse(task.completedAt) + ARCHIVE_DAYS * DAY_MS
+}
+
 /** Undated tasks first, newest first; then dated tasks, soonest first. */
 function byTaskOrder(a: Task, b: Task): number {
   const aWhen = taskWhen(a)
@@ -93,18 +109,13 @@ function byTaskOrder(a: Task, b: Task): number {
   return b.createdAt.localeCompare(a.createdAt)
 }
 
-/** Tasks: pinned work, then open work with no date, then scheduled work, then what was finished today. */
-export function taskSections(tasks: Task[], now = new Date()): TaskSection[] {
+/** Open tasks: pinned work, then work with no date, then scheduled work. Completed tasks are in the Archive. */
+export function taskSections(tasks: Task[]): TaskSection[] {
   const open = tasks.filter(isOpen).sort(byTaskOrder)
-  const today = startOfDay(now)
-  const doneToday = tasks
-    .filter((task) => !task.suggestionStatus && task.completedAt && new Date(task.completedAt) >= today)
-    .sort((a, b) => (b.completedAt as string).localeCompare(a.completedAt as string))
   const sections: TaskSection[] = [
     { id: 'pinned', label: 'Pinned', tasks: open.filter((task) => task.pinned) },
     { id: 'undated', label: 'No date', tasks: open.filter((task) => !task.pinned && !taskWhen(task)) },
     { id: 'scheduled', label: 'Scheduled', tasks: open.filter((task) => !task.pinned && taskWhen(task)) },
-    { id: 'done', label: 'Done today', tasks: doneToday },
   ]
   return sections.filter((section) => section.tasks.length)
 }
@@ -113,18 +124,37 @@ export function openTaskCount(tasks: Task[]): number {
   return tasks.filter(isOpen).length
 }
 
-/** The line under a view's title. `matches` is set while searching the Feed. */
-export function viewDetail(view: View, matches: number | null): string {
-  if (view === 'tasks') return 'Pinned first, then undated, then by date'
-  if (matches === null) return 'Everything you’ve said, newest last'
-  return `${matches} matching message${matches === 1 ? '' : 's'}`
+/** The Archive, most recently completed first. Tasks past their retention are left out. */
+export function archivedTasks(tasks: Task[], now = new Date()): ArchivedTask[] {
+  return tasks
+    .filter(isArchived)
+    .map((task) => ({ task, daysLeft: Math.ceil((archiveExpiry(task) - now.getTime()) / DAY_MS) }))
+    .filter((item) => item.daysLeft > 0)
+    .sort((a, b) => b.task.completedAt.localeCompare(a.task.completedAt))
 }
 
-/** Links visible tasks to captures, filters by search, and groups captures by day. */
+/** Archived tasks whose retention has ended and that should be deleted for good. */
+export function expiredTasks(tasks: Task[], now = new Date()): Task[] {
+  return tasks.filter((task) => isArchived(task) && archiveExpiry(task) <= now.getTime())
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
+}
+
+/** The line under a view's title. `matches` is set while searching Notes. */
+export function viewDetail(view: View, counts: { notes: number; openTasks: number; matches: number | null }): string {
+  if (view === 'archive') return `Completed tasks stay here for ${ARCHIVE_DAYS} days`
+  if (view === 'tasks') return counts.openTasks ? `${counts.openTasks} open` : 'Nothing open'
+  if (counts.matches !== null) return plural(counts.matches, 'matching note')
+  return counts.notes ? plural(counts.notes, 'note') : 'No notes yet'
+}
+
+/** Links open tasks and suggestions to captures, filters by search, and groups captures by day. */
 export function selectCaptureData(captures: Capture[], tasks: Task[], search: string) {
   const tasksByCapture = new Map<string, Task[]>()
   for (const task of tasks) {
-    if (task.suggestionStatus === 'dismissed') continue
+    if (task.suggestionStatus === 'dismissed' || task.completedAt) continue
     const linked = tasksByCapture.get(task.captureId) ?? []
     linked.push(task)
     tasksByCapture.set(task.captureId, linked)

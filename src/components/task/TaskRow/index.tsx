@@ -12,9 +12,9 @@ export default function TaskRow({
   task: Task
   onToggle: (task: Task) => void
   onEdit: (task: Task) => void
-  /** Shows a pin toggle; task lists pass it, rows under a message do not. */
+  /** Shows a pin toggle; task lists pass it, rows under a note do not. */
   onTogglePin?: (task: Task) => void
-  /** Shown under its source message rather than in a task list. */
+  /** Shown under its source note rather than in a task list. */
   linked?: boolean
 }) {
   const done = !!task.completedAt

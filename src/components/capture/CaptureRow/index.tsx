@@ -45,7 +45,7 @@ function CaptureStatus({ capture, onRetry }: { capture: Capture; onRetry: () => 
 }
 
 /**
- * One message in the Feed, with the suggestions and tasks that came from it. While the Feed is
+ * One note, with the suggestions and open tasks that came from it. While Notes is
  * selecting (`selected` is not null), the whole row toggles and the controls under the text are
  * inert; the time and text stay readable because they name the row's checkbox.
  */
@@ -97,7 +97,7 @@ export default function CaptureRow({
               type="button"
               aria-expanded={open}
               aria-controls={menuId}
-              aria-label="Message actions"
+              aria-label="Note actions"
               onClick={() => setOpen((value) => !value)}
             >
               <Ellipsis size={17} />
@@ -132,7 +132,7 @@ export default function CaptureRow({
                 <Plus size={15} aria-hidden="true" /> Make a task
               </button>
               <button className="button button-quiet button-small button-danger-text" type="button" onClick={() => actions.onDelete(capture)}>
-                <Trash2 size={15} aria-hidden="true" /> Delete message
+                <Trash2 size={15} aria-hidden="true" /> Delete note
               </button>
             </div>
           )}

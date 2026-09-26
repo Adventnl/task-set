@@ -7,6 +7,8 @@ import { mergeRecords } from '../utils/records'
 import { useSync } from './useSync'
 
 const EMPTY = { captures: [] as Capture[], tasks: [] as Task[] }
+/** How long Undo stays offered after a task moves to the Archive. */
+const UNDO_MS = 6_000
 
 /** Owns the captures and tasks on screen, the local-first actions on them, and sync. */
 export function useTaskSet() {
@@ -14,7 +16,9 @@ export function useTaskSet() {
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
   const [announcement, setAnnouncement] = useState('')
+  const [archivedId, setArchivedId] = useState<string | null>(null)
   const busyIds = useRef(new Set<string>())
+  const purging = useRef(false)
 
   const merge = useCallback((records: SyncRecord[]) => setData((current) => mergeRecords(current, records)), [])
   // Sync starts after the local copy is on screen, so pulled changes always apply on top of it.
@@ -37,6 +41,29 @@ export function useTaskSet() {
       active = false
     }
   }, [])
+
+  // Archived tasks past their retention are deleted whenever the task list changes, including on start.
+  useEffect(() => {
+    if (loading || purging.current) return
+    purging.current = true
+    workspace
+      .purgeExpiredTasks(data.tasks)
+      .then((records) => {
+        if (!records.length) return
+        merge(records)
+        void requestSync()
+      })
+      .catch((error: unknown) => console.error('Could not delete expired archived tasks.', error))
+      .finally(() => {
+        purging.current = false
+      })
+  }, [loading, data.tasks, merge, requestSync])
+
+  useEffect(() => {
+    if (!archivedId) return
+    const timer = window.setTimeout(() => setArchivedId(null), UNDO_MS)
+    return () => window.clearTimeout(timer)
+  }, [archivedId])
 
   /** Saves on this device, shows the change, then syncs. Returns false when the local save failed. */
   const commit = useCallback(
@@ -66,13 +93,26 @@ export function useTaskSet() {
     return commit(
       `delete:${captures.map((capture) => capture.id).join(',')}`,
       () => workspace.deleteCaptures(captures, data.tasks),
-      one ? 'Message deleted' : `${captures.length} messages deleted`,
-      `Could not delete ${one ? 'that message' : 'those messages'}. Try again.`,
+      one ? 'Note deleted' : `${captures.length} notes deleted`,
+      `Could not delete ${one ? 'that note' : 'those notes'}. Try again.`,
     )
   }
 
-  const toggleTask = (task: Task) =>
-    commit(task.id, () => workspace.setTaskCompleted(task, !task.completedAt), task.completedAt ? 'Task reopened' : 'Task done', 'Could not update that task. Try again.')
+  /** Completing moves the task to the Archive and offers Undo; completing again from the Archive restores it. */
+  const toggleTask = async (task: Task) => {
+    const archiving = !task.completedAt
+    const saved = await commit(
+      task.id,
+      () => workspace.setTaskCompleted(task, archiving),
+      archiving ? 'Task moved to Archive' : 'Task restored',
+      'Could not update that task. Try again.',
+    )
+    if (saved) setArchivedId(archiving ? task.id : null)
+    return saved
+  }
+
+  // Only while it is still archived: restoring it elsewhere, or deleting it, withdraws Undo.
+  const archivedTask = archivedId ? (data.tasks.find((task) => task.id === archivedId && task.completedAt) ?? null) : null
 
   const togglePin = (task: Task) =>
     commit(task.id, () => workspace.setTaskPinned(task, !task.pinned), task.pinned ? 'Task unpinned' : 'Task pinned', 'Could not update that task. Try again.')
@@ -87,7 +127,7 @@ export function useTaskSet() {
     void requestSync()
   }
 
-  const deleteTask = (task: Task) => commit(task.id, () => workspace.deleteTask(task), 'Task deleted; the message is kept', 'Could not delete that task. Try again.')
+  const deleteTask = (task: Task) => commit(task.id, () => workspace.deleteTask(task), 'Task deleted; the note is kept', 'Could not delete that task. Try again.')
 
   async function retrySuggestions(capture: Capture) {
     try {
@@ -109,6 +149,9 @@ export function useTaskSet() {
     sendCapture,
     deleteCaptures,
     toggleTask,
+    archivedTask,
+    undoArchive: () => void (archivedTask && toggleTask(archivedTask)),
+    dismissArchived: () => setArchivedId(null),
     togglePin,
     reviewSuggestion,
     saveTask,

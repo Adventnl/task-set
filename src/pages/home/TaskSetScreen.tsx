@@ -3,6 +3,7 @@ import ConfirmDialog from '../../components/app/ConfirmDialog'
 import NavigationRail from '../../components/app/NavigationRail'
 import Notice from '../../components/app/Notice'
 import SettingsDialog from '../../components/app/SettingsDialog'
+import Toast from '../../components/app/Toast'
 import ViewNavigation from '../../components/app/ViewNavigation'
 import WorkspaceHeader from '../../components/app/WorkspaceHeader'
 import SignInScreen from '../../components/auth/SignInScreen'
@@ -10,16 +11,19 @@ import CaptureFeed from '../../components/capture/CaptureFeed'
 import type { CaptureActions } from '../../components/capture/CaptureRow'
 import Composer from '../../components/capture/Composer'
 import SelectionBar from '../../components/capture/SelectionBar'
+import ArchiveList from '../../components/task/ArchiveList'
 import TaskEditor from '../../components/task/TaskEditor'
 import TaskList from '../../components/task/TaskList'
 import { useAppearance } from '../../shared/hooks/useAppearance'
 import { useDictation } from '../../shared/hooks/useDictation'
+import { useInstallPrompt } from '../../shared/hooks/useInstallPrompt'
 import { useTaskSet } from '../../shared/hooks/useTaskSet'
 import { useWorkspaceView } from '../../shared/hooks/useWorkspaceView'
 import type { Capture, Task } from '../../shared/types/task'
 
 export default function TaskSetScreen() {
   const appearance = useAppearance()
+  const installer = useInstallPrompt()
   const data = useTaskSet()
   const ui = useWorkspaceView(data.captures, data.tasks)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -34,19 +38,20 @@ export default function TaskSetScreen() {
 
   const editTask = (task: Task) => ui.setEditor({ captureId: task.captureId, task })
   const openSettings = () => ui.setSettingsOpen(true)
+  const install = () => void installer.install()
   const confirmDeleteTask = (task: Task) =>
     ui.setConfirmation({
       title: 'Delete this task?',
-      message: 'The message it came from stays in your Feed.',
+      message: 'It is deleted for good. The note it came from stays in Notes.',
       confirmLabel: 'Delete task',
       onConfirm: () => data.deleteTask(task),
     })
   const confirmDeleteCaptures = (captures: Capture[]) => {
     const one = captures.length === 1
     ui.setConfirmation({
-      title: one ? 'Delete this message?' : `Delete ${captures.length} messages?`,
+      title: one ? 'Delete this note?' : `Delete ${captures.length} notes?`,
       message: `Tasks made from ${one ? 'it' : 'them'} are deleted too, on every device.`,
-      confirmLabel: one ? 'Delete message' : `Delete ${captures.length} messages`,
+      confirmLabel: one ? 'Delete note' : `Delete ${captures.length} notes`,
       onConfirm: async () => {
         if (await data.deleteCaptures(captures)) ui.stopSelecting()
       },
@@ -66,7 +71,14 @@ export default function TaskSetScreen() {
 
   return (
     <div className="app">
-      <NavigationRail view={ui.view} taskCount={ui.taskCount} status={data.sync.status} onSelect={ui.selectView} onOpenSettings={openSettings} />
+      <NavigationRail
+        view={ui.view}
+        counts={ui.counts}
+        status={data.sync.status}
+        onSelect={ui.selectView}
+        onOpenSettings={openSettings}
+        onInstall={installer.status === 'available' ? install : undefined}
+      />
       <main className="workspace">
         <WorkspaceHeader
           title={ui.title}
@@ -82,7 +94,7 @@ export default function TaskSetScreen() {
           onToggleSelecting={ui.toggleSelecting}
           onOpenSettings={openSettings}
         />
-        <ViewNavigation view={ui.view} taskCount={ui.taskCount} variant="tabs" onSelect={ui.selectView} />
+        <ViewNavigation view={ui.view} counts={ui.counts} variant="tabs" onSelect={ui.selectView} />
         <div className="workspace-scroll" ref={scrollRef}>
           <div className="column">
             {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
@@ -95,26 +107,39 @@ export default function TaskSetScreen() {
                 scrollRef={scrollRef}
                 actions={actions}
               />
-            ) : (
+            ) : ui.view === 'tasks' ? (
               <TaskList
                 sections={ui.sections}
                 onToggle={(task) => void data.toggleTask(task)}
                 onEdit={editTask}
                 onTogglePin={(task) => void data.togglePin(task)}
               />
+            ) : (
+              <ArchiveList items={ui.archive} onRestore={(task) => void data.toggleTask(task)} onDelete={confirmDeleteTask} />
             )}
           </div>
         </div>
-        {ui.selecting && (
-          <SelectionBar
-            count={ui.selectedCaptures.length}
-            allSelected={ui.allSelected}
-            onToggleAll={ui.toggleSelectAll}
-            onDelete={() => confirmDeleteCaptures(ui.selectedCaptures)}
-            onCancel={ui.stopSelecting}
-          />
-        )}
-        <Composer inputRef={ui.composerRef} dictation={dictation} hidden={ui.selecting} onSend={(text) => send(text, 'text')} />
+        <div className="dock">
+          {data.archivedTask && (
+            <Toast
+              key={data.archivedTask.id}
+              message={`“${data.archivedTask.title}” moved to Archive`}
+              actionLabel="Undo"
+              onAction={data.undoArchive}
+              onDismiss={data.dismissArchived}
+            />
+          )}
+          {ui.selecting && (
+            <SelectionBar
+              count={ui.selectedCaptures.length}
+              allSelected={ui.allSelected}
+              onToggleAll={ui.toggleSelectAll}
+              onDelete={() => confirmDeleteCaptures(ui.selectedCaptures)}
+              onCancel={ui.stopSelecting}
+            />
+          )}
+          <Composer inputRef={ui.composerRef} dictation={dictation} hidden={ui.selecting} onSend={(text) => send(text, 'text')} />
+        </div>
       </main>
 
       {editor && (
@@ -138,6 +163,8 @@ export default function TaskSetScreen() {
           status={data.sync.status}
           message={data.sync.message}
           countUnsynced={data.sync.unsyncedChangeCount}
+          installStatus={installer.status}
+          onInstall={install}
           onAppearanceChange={appearance.chooseAppearance}
           onSignOut={data.sync.signOut}
           onClose={() => ui.setSettingsOpen(false)}

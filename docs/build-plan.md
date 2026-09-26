@@ -8,8 +8,10 @@
 
 27 September 2026: the views are now Feed and Tasks. Tasks lists Pinned, No date (newest first), Scheduled (soonest first), and Done today, with a pin toggle on every row. The Feed can select several messages and delete them, with their tasks, in one local save. Settings (opened from the sync status) adds a per-device System, Light, or Dark appearance; every color token is a single `light-dark()` pair. Checked in headless Chrome at 1280, 390, and 320 px in both appearances.
 
+27 September 2026: notes-app redesign. The Feed is now **Notes**, beside **Tasks** and a new **Archive**, on a paper-white canvas with a tinted sidebar, one amber accent, round checkboxes, and a segmented control on phones. Completing a task moves it to the Archive (with Undo in a toast); archived tasks show their days left, can be restored or deleted, and are deleted for good 60 days after completion by a local purge that syncs. "Done today" is gone. An **Install app** button (sidebar and Settings) uses the browser's install prompt, and Settings explains Safari's route; the manifest adds `launch_handler` and categories. The OpenRouter fallback is off: `OPENROUTER_API_KEY` is now optional, the first deploy no longer asks for it, and extraction only calls OpenRouter when the key is set. Checked with seeded data in headless Chrome at 1280, 390, and 320 px in both appearances.
+
 Next:
 
-1. Deploy from the Cloudflare account that owns `hanoryx.com`: `npx wrangler login`, then `npm run deploy:first` (have an OpenRouter API key ready).
+1. Deploy from the Cloudflare account that owns `hanoryx.com`: `npx wrangler login`, then `npm run deploy:first`.
 2. Try voice on the real phone and Mac browsers; headless tests cannot use a real microphone.
 3. Add reminder notifications (Web Push or a packaged Android client) and data export.
