@@ -11,7 +11,9 @@
     "check": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit && vitest run",
     "validate": "npm run guardrails && npm run check && npm run build",
     "worker:dev": "wrangler dev",
-    "worker:dry-run": "wrangler deploy --dry-run"
+    "worker:dry-run": "wrangler deploy --dry-run",
+    "deploy": "npm run validate && wrangler deploy",
+    "deploy:first": "npm run validate && node scripts/first-deploy.mjs"
   },
   "dependencies": {
     "jose": "^6.2.12",

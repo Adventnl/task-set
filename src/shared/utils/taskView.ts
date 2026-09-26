@@ -1,37 +1,62 @@
-import type { Capture, Editor, Task, TaskInput, View } from '../types/task'
+import type { Capture, Editor, Task, TaskInput, TaskView, View } from '../types/task'
+
+export interface TaskSection {
+  id: string
+  label: string | null
+  tasks: Task[]
+}
+
+export interface CaptureDay {
+  key: string
+  label: string
+  captures: Capture[]
+}
+
+const DAY_MS = 86_400_000
+
+function startOfDay(date: Date): Date {
+  const start = new Date(date)
+  start.setHours(0, 0, 0, 0)
+  return start
+}
+
+/** Whole local days from today: 0 today, 1 tomorrow, -1 yesterday. */
+function dayOffset(value: string, now: Date): number {
+  return Math.round((startOfDay(new Date(value)).getTime() - startOfDay(now).getTime()) / DAY_MS)
+}
 
 export function dayKey(value: string): string {
   const date = new Date(value)
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
 }
 
-export function dayLabel(value: string): string {
-  const today = new Date()
-  const yesterday = new Date(today)
-  yesterday.setDate(today.getDate() - 1)
-  if (dayKey(value) === dayKey(today.toISOString())) return 'Today'
-  if (dayKey(value) === dayKey(yesterday.toISOString())) return 'Yesterday'
+export function dayLabel(value: string, now = new Date()): string {
+  const offset = dayOffset(value, now)
+  if (offset === 0) return 'Today'
+  if (offset === -1) return 'Yesterday'
+  if (offset === 1) return 'Tomorrow'
+  const sameYear = new Date(value).getFullYear() === now.getFullYear()
   return new Intl.DateTimeFormat(undefined, {
     weekday: 'long',
     month: 'short',
     day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
   }).format(new Date(value))
 }
 
 export function timeLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(new Date(value))
 }
 
-export function dateTimeLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
+/** A short relative date and time, such as "Tomorrow 9:00 AM" or "Fri 9:00 AM". */
+export function whenLabel(value: string, now = new Date()): string {
+  const offset = dayOffset(value, now)
+  const time = timeLabel(value)
+  if (offset === 0) return `Today ${time}`
+  if (offset === 1) return `Tomorrow ${time}`
+  if (offset === -1) return `Yesterday ${time}`
+  const day = new Intl.DateTimeFormat(undefined, offset > 1 && offset < 7 ? { weekday: 'short' } : { month: 'short', day: 'numeric' })
+  return `${day.format(new Date(value))} ${time}`
 }
 
 export function toLocalInput(value: string | null): string {
@@ -45,31 +70,98 @@ export function fromLocalInput(value: string): string | null {
   return value ? new Date(value).toISOString() : null
 }
 
-export function tasksForView(tasks: Task[], view: View): Task[] {
-  const active = tasks.filter(
-    (task) => !task.completedAt && !task.suggestionStatus,
-  )
-  const endOfToday = new Date()
-  endOfToday.setHours(23, 59, 59, 999)
-  const filtered = active.filter((task) => {
-    if (view === 'today')
-      return task.pinned || (!!task.dueAt && new Date(task.dueAt) <= endOfToday)
-    if (view === 'inbox') return !task.pinned && !task.dueAt
-    return !task.pinned && !!task.dueAt && new Date(task.dueAt) > endOfToday
-  })
-  return filtered.sort((a, b) => {
-    if (a.dueAt && b.dueAt) return a.dueAt.localeCompare(b.dueAt)
-    if (a.dueAt) return -1
-    if (b.dueAt) return 1
-    return b.createdAt.localeCompare(a.createdAt)
-  })
+/** When a task is scheduled: its deadline, otherwise its reminder. */
+export function taskWhen(task: Task): string | null {
+  return task.dueAt ?? task.reminderAt
 }
 
-export function selectCaptureData(
-  captures: Capture[],
-  tasks: Task[],
-  search: string,
-) {
+export function isOverdue(task: Task, now = new Date()): boolean {
+  return !task.completedAt && !!task.dueAt && new Date(task.dueAt) < now
+}
+
+function isOpen(task: Task): boolean {
+  return !task.completedAt && !task.suggestionStatus
+}
+
+function endOfToday(now: Date): Date {
+  const end = new Date(now)
+  end.setHours(23, 59, 59, 999)
+  return end
+}
+
+function byWhen(a: Task, b: Task): number {
+  const aWhen = taskWhen(a)
+  const bWhen = taskWhen(b)
+  if (aWhen && bWhen) return aWhen.localeCompare(bWhen)
+  if (aWhen) return -1
+  if (bWhen) return 1
+  return b.createdAt.localeCompare(a.createdAt)
+}
+
+/**
+ * Today: pinned work and anything scheduled up to the end of today.
+ * Inbox: open work with no date. Upcoming: open work scheduled after today.
+ */
+export function tasksForView(tasks: Task[], view: TaskView, now = new Date()): Task[] {
+  const end = endOfToday(now)
+  return tasks
+    .filter((task) => {
+      if (!isOpen(task)) return false
+      const when = taskWhen(task)
+      if (view === 'today') return task.pinned || (!!when && new Date(when) <= end)
+      if (view === 'inbox') return !task.pinned && !when
+      return !task.pinned && !!when && new Date(when) > end
+    })
+    .sort(byWhen)
+}
+
+export function sectionsForView(tasks: Task[], view: TaskView, now = new Date()): TaskSection[] {
+  const open = tasksForView(tasks, view, now)
+  if (view === 'inbox') return open.length ? [{ id: 'inbox', label: null, tasks: open }] : []
+  if (view === 'upcoming') {
+    const days = new Map<string, TaskSection>()
+    for (const task of open) {
+      const when = taskWhen(task) as string
+      const key = dayKey(when)
+      const section = days.get(key) ?? { id: key, label: dayLabel(when, now), tasks: [] }
+      section.tasks.push(task)
+      days.set(key, section)
+    }
+    return [...days.values()]
+  }
+  const today = startOfDay(now)
+  const doneToday = tasks
+    .filter((task) => !task.suggestionStatus && task.completedAt && new Date(task.completedAt) >= today)
+    .sort((a, b) => (b.completedAt as string).localeCompare(a.completedAt as string))
+  const sections: TaskSection[] = [
+    { id: 'overdue', label: 'Overdue', tasks: open.filter((task) => isOverdue(task, now)) },
+    { id: 'today', label: 'Today', tasks: open.filter((task) => !isOverdue(task, now)) },
+    { id: 'done', label: 'Done today', tasks: doneToday },
+  ].filter((section) => section.tasks.length)
+  // The view is already titled Today; a lone Today section needs no second heading.
+  return sections.length === 1 && sections[0].id === 'today' ? [{ ...sections[0], label: null }] : sections
+}
+
+export function countsForViews(tasks: Task[], now = new Date()): Record<TaskView, number> {
+  return {
+    today: tasksForView(tasks, 'today', now).length,
+    inbox: tasksForView(tasks, 'inbox', now).length,
+    upcoming: tasksForView(tasks, 'upcoming', now).length,
+  }
+}
+
+/** The line under a view's title. `matches` is set while searching the Feed. */
+export function viewDetail(view: View, matches: number | null, now = new Date()): string {
+  if (view === 'feed') {
+    if (matches === null) return 'Everything you’ve said, newest last'
+    return `${matches} matching message${matches === 1 ? '' : 's'}`
+  }
+  if (view === 'today') return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(now)
+  return view === 'inbox' ? 'Tasks without a date' : 'Scheduled after today'
+}
+
+/** Links visible tasks to captures, filters by search, and groups captures by day. */
+export function selectCaptureData(captures: Capture[], tasks: Task[], search: string) {
   const tasksByCapture = new Map<string, Task[]>()
   for (const task of tasks) {
     if (task.suggestionStatus === 'dismissed') continue
@@ -77,35 +169,35 @@ export function selectCaptureData(
     linked.push(task)
     tasksByCapture.set(task.captureId, linked)
   }
-
   const term = search.trim().toLocaleLowerCase()
   const visibleCaptures = term
     ? captures.filter(
         (capture) =>
           capture.text.toLocaleLowerCase().includes(term) ||
-          tasksByCapture
-            .get(capture.id)
-            ?.some((task) => task.title.toLocaleLowerCase().includes(term)),
+          tasksByCapture.get(capture.id)?.some((task) => task.title.toLocaleLowerCase().includes(term)),
       )
     : captures
-
-  return { visibleCaptures, tasksByCapture }
+  const days: CaptureDay[] = []
+  for (const capture of visibleCaptures) {
+    const key = dayKey(capture.createdAt)
+    if (days.at(-1)?.key !== key) days.push({ key, label: dayLabel(capture.createdAt), captures: [] })
+    days[days.length - 1].captures.push(capture)
+  }
+  return { days, tasksByCapture, matchCount: visibleCaptures.length }
 }
 
-export function taskFromEditor(
-  editor: Editor,
-  input: TaskInput,
-  id: string,
-  now: string,
-): Task {
+/** Saving from the editor also accepts a suggestion, since the user has reviewed it. */
+export function taskFromEditor(editor: Editor, input: TaskInput, id: string, now: string): Task {
   return editor.task
-    ? { ...editor.task, ...input, updatedAt: now }
+    ? { ...editor.task, ...input, suggestionStatus: null, updatedAt: now }
     : {
         id,
         captureId: editor.captureId,
         ...input,
         createdAt: now,
         updatedAt: now,
+        deletedAt: null,
         completedAt: null,
+        suggestionStatus: null,
       }
 }

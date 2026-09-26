@@ -1,41 +1,37 @@
 import { Check } from 'lucide-react'
 import type { Task } from '../../../shared/types/task'
-import { dateTimeLabel } from '../../../shared/utils/taskView'
+import TaskMeta from '../TaskMeta'
 
 export default function TaskRow({
   task,
   onToggle,
   onEdit,
-  compact = false,
+  linked = false,
 }: {
   task: Task
   onToggle: (task: Task) => void
   onEdit: (task: Task) => void
-  compact?: boolean
+  /** Shown under its source message rather than in a task list. */
+  linked?: boolean
 }) {
+  const done = !!task.completedAt
   return (
-    <div
-      className={`task-row ${compact ? 'task-row-compact' : ''} ${task.completedAt ? 'is-complete' : ''}`}
-    >
+    <div className={`task-row${linked ? ' task-row-linked' : ''}${done ? ' is-done' : ''}`}>
       <button
         className="task-check"
         type="button"
+        role="checkbox"
+        aria-checked={done}
         onClick={() => onToggle(task)}
-        aria-label={`${task.completedAt ? 'Reopen' : 'Complete'} ${task.title}`}
+        aria-label={`${done ? 'Reopen' : 'Complete'} “${task.title}”`}
       >
-        {task.completedAt ? <Check size={13} strokeWidth={2.5} /> : null}
+        <span className="task-check-box" aria-hidden="true">
+          {done && <Check size={12} strokeWidth={3} />}
+        </span>
       </button>
-      <button className="task-body" type="button" onClick={() => onEdit(task)}>
+      <button className="task-body" type="button" onClick={() => onEdit(task)} aria-label={`Edit “${task.title}”`}>
         <span className="task-title">{task.title}</span>
-        {(task.dueAt || task.reminderAt || task.pinned) && (
-          <span className="task-meta">
-            {task.dueAt && <span>Due {dateTimeLabel(task.dueAt)}</span>}
-            {task.reminderAt && (
-              <span>Remind {dateTimeLabel(task.reminderAt)}</span>
-            )}
-            {task.pinned && <span>On Today</span>}
-          </span>
-        )}
+        <TaskMeta task={task} />
       </button>
     </div>
   )

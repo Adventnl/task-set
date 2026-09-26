@@ -1,90 +1,94 @@
-import { describe, expect, it, vi } from 'vitest'
-import { selectCaptureData, taskFromEditor, tasksForView } from '../src/shared/utils/taskView'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Capture, Task } from '../src/shared/types/task'
+import { sectionsForView, selectCaptureData, taskFromEditor, tasksForView, whenLabel } from '../src/shared/utils/taskView'
 
-const captures: Capture[] = [
-  {
-    id: 'a',
-    kind: 'text',
-    text: 'Call Sam',
-    createdAt: '2026-09-25T00:00:00.000Z',
-  },
-  {
-    id: 'b',
-    kind: 'text',
-    text: 'An unrelated note',
-    createdAt: '2026-09-25T01:00:00.000Z',
-  },
-]
+const capture = (id: string, text: string, createdAt: string): Capture => ({
+  id,
+  kind: 'text',
+  text,
+  timeZone: 'UTC',
+  createdAt,
+  updatedAt: createdAt,
+  deletedAt: null,
+  ai: 'ready',
+})
 
-const tasks: Task[] = [
-  {
-    id: 'task-a',
-    captureId: 'a',
-    title: 'Phone Sam',
-    createdAt: captures[0].createdAt,
-    updatedAt: captures[0].createdAt,
-    dueAt: null,
-    reminderAt: null,
-    pinned: false,
-    completedAt: null,
-  },
-  {
-    id: 'task-b',
-    captureId: 'b',
-    title: 'Hidden suggestion',
-    createdAt: captures[1].createdAt,
-    updatedAt: captures[1].createdAt,
-    dueAt: null,
-    reminderAt: null,
-    pinned: false,
-    completedAt: null,
-    suggestionStatus: 'dismissed',
-  },
-]
+const base: Task = {
+  id: 'task',
+  captureId: 'a',
+  title: 'Phone Sam',
+  createdAt: '2026-09-25T00:00:00.000Z',
+  updatedAt: '2026-09-25T00:00:00.000Z',
+  deletedAt: null,
+  dueAt: null,
+  reminderAt: null,
+  pinned: false,
+  completedAt: null,
+  suggestionStatus: null,
+}
 
-describe('task view data', () => {
+describe('feed data', () => {
+  const captures = [capture('a', 'Call Sam', '2026-09-25T09:00:00'), capture('b', 'An unrelated note', '2026-09-26T09:00:00')]
+  const tasks = [base, { ...base, id: 'hidden', captureId: 'b', title: 'Hidden suggestion', suggestionStatus: 'dismissed' as const }]
+
   it('searches visible linked tasks without surfacing dismissed suggestions', () => {
-    expect(
-      selectCaptureData(captures, tasks, 'phone').visibleCaptures.map(
-        ({ id }) => id,
-      ),
-    ).toEqual(['a'])
-    expect(
-      selectCaptureData(captures, tasks, 'hidden').visibleCaptures,
-    ).toEqual([])
-    expect(
-      selectCaptureData(captures, tasks, '').tasksByCapture.get('b'),
-    ).toBeUndefined()
+    expect(selectCaptureData(captures, tasks, 'phone').days.flatMap((day) => day.captures.map(({ id }) => id))).toEqual(['a'])
+    expect(selectCaptureData(captures, tasks, 'hidden').matchCount).toBe(0)
+    expect(selectCaptureData(captures, tasks, '').tasksByCapture.get('b')).toBeUndefined()
   })
 
-  it('preserves a reminder when creating a manual task', () => {
+  it('groups captures by local day in order', () => {
+    expect(selectCaptureData(captures, tasks, '').days.map((day) => day.captures.length)).toEqual([1, 1])
+  })
+})
+
+describe('task editor', () => {
+  it('keeps a reminder without inventing a due date', () => {
     const reminderAt = '2026-09-26T09:00:00.000Z'
-    const task = taskFromEditor(
-      { captureId: 'a' },
-      { title: 'Call Sam', dueAt: null, reminderAt, pinned: false },
-      'new-id',
-      captures[0].createdAt,
-    )
-    expect(task.reminderAt).toBe(reminderAt)
-    expect(task.dueAt).toBeNull()
+    const task = taskFromEditor({ captureId: 'a' }, { title: 'Call Sam', dueAt: null, reminderAt, pinned: false }, 'new-id', base.createdAt)
+    expect(task).toMatchObject({ reminderAt, dueAt: null, deletedAt: null, suggestionStatus: null })
   })
 
-  it('places overdue, pinned, undated, and future work in the intended views', () => {
+  it('accepts a suggestion when it is saved from the editor', () => {
+    const task = taskFromEditor({ captureId: 'a', task: { ...base, suggestionStatus: 'suggested' } }, { title: 'Edited', dueAt: null, reminderAt: null, pinned: false }, 'unused', '2026-09-26T00:00:00.000Z')
+    expect(task).toMatchObject({ id: 'task', title: 'Edited', suggestionStatus: null })
+  })
+})
+
+describe('task views', () => {
+  beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-26T12:00:00'))
-    try {
-      const rows: Task[] = [
-        { ...tasks[0], id: 'overdue', dueAt: '2026-09-25T09:00:00' },
-        { ...tasks[0], id: 'pinned', pinned: true },
-        { ...tasks[0], id: 'inbox' },
-        { ...tasks[0], id: 'future', dueAt: '2026-09-28T09:00:00' },
-      ]
-      expect(tasksForView(rows, 'today').map(({ id }) => id)).toEqual(['overdue', 'pinned'])
-      expect(tasksForView(rows, 'inbox').map(({ id }) => id)).toEqual(['inbox'])
-      expect(tasksForView(rows, 'upcoming').map(({ id }) => id)).toEqual(['future'])
-    } finally {
-      vi.useRealTimers()
-    }
+  })
+  afterEach(() => vi.useRealTimers())
+
+  const rows: Task[] = [
+    { ...base, id: 'overdue', dueAt: '2026-09-25T09:00:00' },
+    { ...base, id: 'pinned', pinned: true },
+    { ...base, id: 'remind-today', reminderAt: '2026-09-26T18:00:00' },
+    { ...base, id: 'inbox' },
+    { ...base, id: 'future', dueAt: '2026-09-28T09:00:00' },
+    { ...base, id: 'remind-tomorrow', reminderAt: '2026-09-27T09:00:00' },
+    { ...base, id: 'draft', suggestionStatus: 'suggested' },
+    { ...base, id: 'done', completedAt: '2026-09-26T08:00:00' },
+  ]
+
+  it('schedules by due date or, failing that, reminder', () => {
+    expect(tasksForView(rows, 'today').map(({ id }) => id)).toEqual(['overdue', 'remind-today', 'pinned'])
+    expect(tasksForView(rows, 'inbox').map(({ id }) => id)).toEqual(['inbox'])
+    expect(tasksForView(rows, 'upcoming').map(({ id }) => id)).toEqual(['remind-tomorrow', 'future'])
+  })
+
+  it('splits Today into overdue, today, and done', () => {
+    expect(sectionsForView(rows, 'today').map((section) => [section.label, section.tasks.map(({ id }) => id)])).toEqual([
+      ['Overdue', ['overdue']],
+      ['Today', ['remind-today', 'pinned']],
+      ['Done today', ['done']],
+    ])
+  })
+
+  it('groups Upcoming by day with relative labels', () => {
+    expect(sectionsForView(rows, 'upcoming').map((section) => section.label)).toEqual(['Tomorrow', expect.stringMatching(/Monday/)])
+    expect(whenLabel('2026-09-27T09:00:00')).toMatch(/^Tomorrow /)
   })
 })

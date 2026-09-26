@@ -69,7 +69,7 @@ src/
   shared/config/
 ```
 
-The current single-page app uses `pages/home`, task components, `useTaskSet`, `localDataService`, and `aiConnector`. Add `router/` only when real URL routes are introduced; do not build routing for the four in-page views. `src/styles.css` is the existing global stylesheet.
+The current single-page app uses `pages/home`; `app`, `auth`, `capture`, and `task` components; the `useTaskSet`, `useSync`, `useDictation`, and `useWorkspaceView` hooks; `localDataService`, `syncService`, `speechService`, and `workspaceService`; and the `sync`, `ai`, and `speech` connectors. The Cloudflare Worker lives in `worker/` and shares record types and validation with the app through `src/shared`. Add `router/` only when real URL routes are introduced; do not build routing for the four in-page views. `src/styles.css` is the existing global stylesheet.
 
 Rules:
 

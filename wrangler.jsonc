@@ -4,6 +4,10 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-09-25",
   "compatibility_flags": ["nodejs_compat"],
+  // Served only on the custom domain. The hanoryx.com zone must be in the deploying account.
+  "routes": [{ "pattern": "task.hanoryx.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -11,11 +15,14 @@
     "run_worker_first": ["/api/*"]
   },
   "ai": { "binding": "AI" },
-  "ratelimits": [{
-    "name": "AI_RATE_LIMIT",
-    "namespace_id": "1947021",
-    "simple": { "limit": 6, "period": 60 }
-  }],
-  "secrets": { "required": ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD"] },
+  "durable_objects": {
+    "bindings": [{ "name": "TASK_SPACE", "class_name": "TaskSpace" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TaskSpace"] }],
+  "ratelimits": [
+    { "name": "AI_RATE_LIMIT", "namespace_id": "1947021", "simple": { "limit": 6, "period": 60 } },
+    { "name": "AUTH_RATE_LIMIT", "namespace_id": "1947022", "simple": { "limit": 5, "period": 60 } }
+  ],
+  "secrets": { "required": ["APP_PASSCODE", "SESSION_SECRET"] },
   "observability": { "enabled": true }
 }

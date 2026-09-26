@@ -1,6 +1,6 @@
 # Task Set: product and build plan
 
-Status: revised for a macOS-first web MVP, 24 September 2026. `task.hanoryx.com` is the intended host name; deployment has not been completed.
+Status: revised 26 September 2026. Phases 1–4 are implemented as one installable web app for Mac and phone, with live sync and automatic AI suggestions. `task.hanoryx.com` is the intended host name; deployment has not been completed.
 
 ## The problem
 
@@ -10,7 +10,7 @@ For example, at 11 pm, someone says, “I need to change the Cloudflare email to
 
 ## Product rules
 
-1. **Capture first.** A saved text or audio capture is never lost because transcription, AI, or sync fails.
+1. **Capture first.** A saved capture is never lost because AI or sync fails. Voice is turned into text as it is spoken and saved as text; audio is never stored (decision of 26 September 2026).
 2. **The feed is the source.** Every capture remains in a chronological, searchable private feed. A capture may produce zero, one, or several tasks.
 3. **AI suggests; the user controls.** The app never silently invents a deadline, deletes a capture, or marks work complete. AI output appears as a visible draft that can be edited or dismissed. A reminder can be proposed when the user's words specify one.
 4. **Reminder time is distinct from due time.** “Remind me tomorrow morning” sets a reminder, not a due date. “Due Friday” sets a due date.
@@ -38,15 +38,21 @@ This first slice stores private data in that browser profile. It does not yet ha
 
 ### 2. Hosted and offline-ready browser app
 
+Implementation status (26 September 2026): the web app manifest, icons, and service worker are built; the installed app opens offline. The Worker is configured for the `task.hanoryx.com` custom domain but not deployed. Data export is not built.
+
 Configure `task.hanoryx.com` on the existing domain, serve the app over HTTPS, and verify that the loaded app shell and local capture work when disconnected. Add data export before depending on a single local browser store. Add a manifest and installation support if the browser behavior is reliable. Do not describe the site as live until deployment and checks are complete.
 
 ### 3. Accounts and sync
+
+Implementation status (26 September 2026): a single passcode signs a device in with a signed, HttpOnly session cookie. All devices share one Cloudflare Durable Object that stores captures and tasks in SQLite with a change sequence, and nudges devices over WebSockets to pull. Each browser keeps an IndexedDB copy and an outbox of unsent changes. The most recent task edit wins; capture text is immutable; deleting a capture deletes its tasks. This replaces the Supabase candidate below and needs no service outside Cloudflare.
 
 Add sign-in, private account-scoped storage, a local write queue with stable IDs, initial sync, reconnect catch-up, and live updates. The original capture is immutable. For simple task fields, the latest server-accepted edit wins; an unsynced capture must never be silently discarded. A candidate hosted service is Supabase Auth, Postgres, and Realtime, subject to a prototype and current free-tier terms. The browser app should save locally first, then sync. Sign-in should be a requirement for cross-device data, not for opening a public landing page.
 
 ### 4. Voice and AI
 
-Implementation status (25 September 2026): Local browser recording, audio playback/download, editable transcripts, draft task suggestions, and a Cloudflare Worker AI connector have been built. AI use requires an explicit click. The Worker is not deployed and hosted Access authentication has not been configured. Browser audio is saved in its native format; MP3 transcoding is not included. The recording remains local because account sync is not present.
+Implementation status (26 September 2026): Hold-to-talk uses the browser's live speech recognition, so words appear while speaking and are sent as text on release. Browsers without it record into memory and send the audio once to Whisper with voice-activity filtering; the audio is discarded. Every new capture is queued on the server for automatic extraction by Llama 4 Scout, retried up to three times, and shown as editable **Suggested** drafts. The model receives the local time and a 14-day calendar; its output must quote the capture, and code enforces the reminder/due rule, default times, and a plausible date range. Earlier recording storage, playback, download, and manual transcript editing were removed at the user's request.
+
+The paragraphs below describe the original plan; where they mention stored recordings, the decision above replaces them.
 
 Add hold-to-record capture, save the audio locally on release, then transcribe and extract task suggestions. Show saved, transcribing, extracting, ready, and needs-retry states. Until transcription succeeds, the recording remains on its originating device; other synced devices can show a placeholder. Keep the local audio until the transcript is safely stored and synced, then remove it by default unless the user chooses to keep it.
 
@@ -56,17 +62,19 @@ A Cloudflare Worker on the existing domain is the candidate AI endpoint. It shou
 
 ### 5. Android and native clients
 
+Implementation status (26 September 2026): phone capture uses the same web app, installed to the home screen, instead of a separate Android codebase. A native or packaged Android client remains the route to reliable offline reminder notifications.
+
 Build the Android experience after the Mac workflow and sync model are proven. Android can become the designated reminder device so a reminder does not alert on every device; an already scheduled alert must still fire without network access. Windows and native macOS clients can follow if browser limits justify them. iPhone support remains later. Any new client uses the same source capture and task semantics.
 
 ## Proposed implementation boundaries
 
 | Part | Initial direction |
 | --- | --- |
-| Mac MVP | Web app with a simple, responsive desktop layout. Target host: `task.hanoryx.com`. |
+| Mac and phone | One installable web app with desktop and phone layouts. Target host: `task.hanoryx.com`. |
 | Local data | Persistent browser storage and local-first writes. Verify reload, restart, and offline behavior on the browsers used for the MVP. |
 | Hosting | Existing domain; configure DNS and hosting only when the app is ready to deploy. |
-| Sync, later | Supabase is a candidate for account auth, private Postgres rows, and live changes. Recheck service terms before implementation. |
-| AI, later | Authenticated Cloudflare Worker for transcription and task extraction, with strict usage limits. Recheck model availability and costs before implementation. |
+| Sync | Passcode session plus one Cloudflare Durable Object (SQLite and hibernating WebSockets) behind the same Worker. |
+| AI | Workers AI from the Worker: Llama 4 Scout for suggestions, Whisper for fallback transcription. Rate-limited; no AI API key. |
 | Native, later | Android reminder client first; native Mac and Windows packages only if needed after daily use of the web app. |
 
 The target is no additional monthly service charge for normal personal use, subject to current provider limits. Do not enable paid plans or metered providers without a deliberate decision. Never put a Supabase service-role key or Cloudflare API token in a browser or native bundle. Apply account-scoped database policies to every exposed table once hosted sync exists.
