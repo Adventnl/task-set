@@ -1,15 +1,24 @@
-import { ListChecks, Search, X } from 'lucide-react'
+import { ChevronLeft, ListChecks, Search, X, type LucideIcon } from 'lucide-react'
 import type { RefObject } from 'react'
 import type { SyncStatus as Status } from '../../../shared/types/sync'
 import SyncStatus from '../SyncStatus'
 
+export interface HeaderAction {
+  label: string
+  icon: LucideIcon
+  onClick: () => void
+}
+
 /**
- * View title with search and, in Notes, note selection. On phones it also carries the
- * sync state and settings, since the rail is hidden.
+ * View title with search, one optional action for the view, and, in Notes, note selection. A page
+ * inside a view (an open meeting) has a back link above its title. On phones the header also carries
+ * the sync state and settings, since the rail is hidden.
  */
 export default function WorkspaceHeader({
   title,
   detail,
+  back,
+  action,
   status,
   searchOpen,
   search,
@@ -23,6 +32,8 @@ export default function WorkspaceHeader({
 }: {
   title: string
   detail: string
+  back?: { label: string; onClick: () => void }
+  action?: HeaderAction
   status: Status
   searchOpen: boolean
   search: string
@@ -38,6 +49,12 @@ export default function WorkspaceHeader({
   return (
     <header className="workspace-header">
       <div className="workspace-title">
+        {back && (
+          <button className="back-link" type="button" onClick={back.onClick}>
+            <ChevronLeft size={18} aria-hidden="true" />
+            {back.label}
+          </button>
+        )}
         <h1>{title}</h1>
         <p>{detail}</p>
       </div>
@@ -45,6 +62,11 @@ export default function WorkspaceHeader({
         <div className="mobile-only">
           <SyncStatus status={status} compact onOpen={onOpenSettings} />
         </div>
+        {action && (
+          <button className="icon-button" type="button" onClick={action.onClick} aria-label={action.label} title={action.label}>
+            <action.icon size={18} />
+          </button>
+        )}
         {onToggleSelecting && (
           <button
             className="icon-button"

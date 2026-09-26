@@ -1,8 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { LiveMessage, PullResponse, SyncRecord } from '../src/shared/types/sync'
-import type { Capture, Task } from '../src/shared/types/task'
+import type { Capture } from '../src/shared/types/task'
 import { extractSuggestions } from './extraction'
-import { deletedTask, mergeCapture, mergeTask, suggestionTask } from './merge'
+import { CHILD_TYPE, deletedRecord, mergeRecord, parentOf, suggestionTask } from './merge'
 import type { Suggestion } from './validation'
 
 const PAGE_SIZE = 500
@@ -10,35 +10,43 @@ const AI_BATCH = 5
 const MAX_AI_ATTEMPTS = 3
 const AI_RETRY_BASE_MS = 15_000
 
-type RecordRow = { type: SyncRecord['type']; body: string; seq: number }
+type RecordType = SyncRecord['type']
+type RecordRow = { type: RecordType; body: string; seq: number }
 type QueueRow = { capture_id: string; attempts: number }
 
 /**
- * One private workspace. SQLite holds every capture and task with a change sequence number;
- * devices pull by sequence and are nudged over hibernating WebSockets when it moves.
+ * One private workspace. SQLite holds every record with a change sequence number; devices pull
+ * by sequence and are nudged over hibernating WebSockets when it moves. `parent_id` links a child
+ * to its parent (a task to its capture, a meeting note to its meeting) so deletions cascade.
  */
 export class TaskSpace extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
     ctx.blockConcurrencyWhile(async () => {
-      this.ctx.storage.sql.exec(`
+      const sql = this.ctx.storage.sql
+      sql.exec(`
         CREATE TABLE IF NOT EXISTS records (
           type TEXT NOT NULL,
           id TEXT NOT NULL,
-          capture_id TEXT,
+          parent_id TEXT,
           body TEXT NOT NULL,
           seq INTEGER NOT NULL,
           PRIMARY KEY (type, id)
         );
         CREATE INDEX IF NOT EXISTS records_by_seq ON records (seq);
-        CREATE INDEX IF NOT EXISTS records_by_capture ON records (capture_id);
         CREATE TABLE IF NOT EXISTS ai_queue (
           capture_id TEXT PRIMARY KEY,
           attempts INTEGER NOT NULL,
           run_at INTEGER NOT NULL
         );
       `)
+      // Before meetings, the only parent was a capture, in a column named for it.
+      const columns = sql.exec<{ name: string }>('PRAGMA table_info(records)').toArray()
+      if (columns.some((column) => column.name === 'capture_id')) {
+        sql.exec('DROP INDEX IF EXISTS records_by_capture; ALTER TABLE records RENAME COLUMN capture_id TO parent_id;')
+      }
+      sql.exec('CREATE INDEX IF NOT EXISTS records_by_parent ON records (type, parent_id);')
     })
   }
 
@@ -61,23 +69,18 @@ export class TaskSpace extends DurableObject<Env> {
     const start = this.latestSeq()
     let seq = start
     let queued = false
-    // Captures first so tasks in the same batch always follow their source.
-    const ordered = [...records].sort((a, b) => Number(a.type === 'task') - Number(b.type === 'task'))
+    // Parents first so children in the same batch always follow their parent.
+    const ordered = [...records].sort((a, b) => Number(!!parentOf(a)) - Number(!!parentOf(b)))
     for (const record of ordered) {
-      if (record.type === 'task') {
-        const next = mergeTask(this.read<Task>('task', record.value.id), record.value)
-        if (next) this.write('task', next, ++seq)
-        continue
-      }
-      const existing = this.read<Capture>('capture', record.value.id)
-      const next = mergeCapture(existing, record.value)
-      if (!next) continue
-      this.write('capture', next, ++seq)
-      if (next.ai === 'queued') {
-        this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue VALUES (?, 0, ?)', next.id, Date.now())
+      const merged = mergeRecord(this.read(record.type, record.value.id), record)
+      if (!merged) continue
+      const next = this.withoutDeletedParent(merged)
+      this.write(next, ++seq)
+      if (next.type === 'capture' && next.value.ai === 'queued') {
+        this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue VALUES (?, 0, ?)', next.value.id, Date.now())
         queued = true
       }
-      if (next.deletedAt) seq = this.deleteLinked(next, seq)
+      if (next.value.deletedAt) seq = this.deleteChildren(next, seq)
     }
     if (queued) await this.ctx.storage.setAlarm(Date.now())
     if (seq !== start) this.broadcast(seq)
@@ -86,10 +89,10 @@ export class TaskSpace extends DurableObject<Env> {
 
   /** Requeues a capture whose extraction failed. Returns false when there is nothing to retry. */
   async retryAi(captureId: string): Promise<boolean> {
-    const capture = this.read<Capture>('capture', captureId)
+    const capture = this.readCapture(captureId)
     if (!capture || capture.deletedAt || capture.ai !== 'failed') return false
     const seq = this.latestSeq() + 1
-    this.write('capture', { ...capture, ai: 'queued' }, seq)
+    this.write({ type: 'capture', value: { ...capture, ai: 'queued' } }, seq)
     this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue VALUES (?, 0, ?)', captureId, Date.now())
     await this.ctx.storage.setAlarm(Date.now())
     this.broadcast(seq)
@@ -118,7 +121,7 @@ export class TaskSpace extends DurableObject<Env> {
   }
 
   private async runExtraction(job: QueueRow): Promise<void> {
-    const capture = this.read<Capture>('capture', job.capture_id)
+    const capture = this.readCapture(job.capture_id)
     if (!capture || capture.deletedAt) {
       this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
       return
@@ -131,15 +134,15 @@ export class TaskSpace extends DurableObject<Env> {
       return
     }
     // Other requests may run during the AI call; re-read so a deletion is respected.
-    const latest = this.read<Capture>('capture', capture.id)
+    const latest = this.readCapture(capture.id)
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', capture.id)
     if (!latest || latest.deletedAt) return
     let seq = this.latestSeq()
     suggestions.forEach((suggestion, index) => {
       const task = suggestionTask(latest, suggestion, index)
-      if (!this.read<Task>('task', task.id)) this.write('task', task, ++seq)
+      if (!this.read('task', task.id)) this.write({ type: 'task', value: task }, ++seq)
     })
-    this.write('capture', { ...latest, ai: 'ready' }, ++seq)
+    this.write({ type: 'capture', value: { ...latest, ai: 'ready' } }, ++seq)
     this.broadcast(seq)
   }
 
@@ -154,23 +157,32 @@ export class TaskSpace extends DurableObject<Env> {
       return
     }
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
-    const latest = this.read<Capture>('capture', job.capture_id)
+    const latest = this.readCapture(job.capture_id)
     if (!latest || latest.deletedAt) return
     const seq = this.latestSeq() + 1
-    this.write('capture', { ...latest, ai: 'failed' }, seq)
+    this.write({ type: 'capture', value: { ...latest, ai: 'failed' } }, seq)
     this.broadcast(seq)
   }
 
-  /** Deleting a capture deletes its tasks and cancels pending AI work. */
-  private deleteLinked(capture: Capture, seq: number): number {
-    this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', capture.id)
+  /** A child made on one device for a parent deleted on another is deleted too. */
+  private withoutDeletedParent(record: SyncRecord): SyncRecord {
+    const parent = parentOf(record)
+    const deletedAt = parent && !record.value.deletedAt ? this.read(parent.type, parent.id)?.value.deletedAt : null
+    return deletedAt ? deletedRecord(record, deletedAt) : record
+  }
+
+  /** Deletes a deleted parent's children; deleting a capture also cancels its pending AI work. */
+  private deleteChildren(parent: SyncRecord, seq: number): number {
+    if (parent.type === 'capture') this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', parent.value.id)
+    const childType = CHILD_TYPE[parent.type]
+    if (!childType) return seq
     const rows = this.ctx.storage.sql
-      .exec<{ body: string }>("SELECT body FROM records WHERE type = 'task' AND capture_id = ?", capture.id)
+      .exec<{ body: string }>('SELECT body FROM records WHERE type = ? AND parent_id = ?', childType, parent.value.id)
       .toArray()
     let next = seq
     for (const row of rows) {
-      const task = JSON.parse(row.body) as Task
-      if (!task.deletedAt) this.write('task', deletedTask(task, capture.deletedAt ?? capture.updatedAt), ++next)
+      const child = { type: childType, value: JSON.parse(row.body) } as SyncRecord
+      if (!child.value.deletedAt) this.write(deletedRecord(child, parent.value.deletedAt ?? parent.value.updatedAt), ++next)
     }
     return next
   }
@@ -179,19 +191,24 @@ export class TaskSpace extends DurableObject<Env> {
     return this.ctx.storage.sql.exec<{ seq: number | null }>('SELECT MAX(seq) AS seq FROM records').one().seq ?? 0
   }
 
-  private read<T extends Capture | Task>(type: SyncRecord['type'], id: string): T | null {
+  /** Stored bodies were validated before they were written, so they are trusted here. */
+  private read(type: RecordType, id: string): SyncRecord | null {
     const row = this.ctx.storage.sql.exec<{ body: string }>('SELECT body FROM records WHERE type = ? AND id = ?', type, id).toArray()[0]
-    return row ? (JSON.parse(row.body) as T) : null
+    return row ? ({ type, value: JSON.parse(row.body) } as SyncRecord) : null
   }
 
-  private write(type: SyncRecord['type'], value: Capture | Task, seq: number): void {
-    const captureId = 'captureId' in value ? value.captureId : null
+  private readCapture(id: string): Capture | null {
+    const record = this.read('capture', id)
+    return record?.type === 'capture' ? record.value : null
+  }
+
+  private write(record: SyncRecord, seq: number): void {
     this.ctx.storage.sql.exec(
-      'INSERT OR REPLACE INTO records (type, id, capture_id, body, seq) VALUES (?, ?, ?, ?, ?)',
-      type,
-      value.id,
-      captureId,
-      JSON.stringify(value),
+      'INSERT OR REPLACE INTO records (type, id, parent_id, body, seq) VALUES (?, ?, ?, ?, ?)',
+      record.type,
+      record.value.id,
+      parentOf(record)?.id ?? null,
+      JSON.stringify(record.value),
       seq,
     )
   }

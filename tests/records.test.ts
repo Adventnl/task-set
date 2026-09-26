@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import type { CalendarEvent } from '../src/shared/types/calendar'
+import type { Meeting, MeetingNote } from '../src/shared/types/meeting'
 import type { Capture, Task } from '../src/shared/types/task'
-import { mergeRecords, parseCapture, parseSyncRecord, parseTask } from '../src/shared/utils/records'
-import { deletedTask, mergeCapture, mergeTask, suggestionTask } from '../worker/merge'
+import { EMPTY_WORKSPACE, mergeRecords, parseCapture, parseEvent, parseMeeting, parseMeetingNote, parseSyncRecord, parseTask } from '../src/shared/utils/records'
+import { deletedRecord, mergeCapture, mergeRecord, mergeTask, parentOf, suggestionTask } from '../worker/merge'
 
 const capture: Capture = {
   id: 'c1',
@@ -28,6 +30,36 @@ const task: Task = {
   suggestionStatus: null,
 }
 
+const event: CalendarEvent = {
+  id: 'e1',
+  date: '2026-09-28',
+  text: 'Dentist',
+  createdAt: '2026-09-25T22:00:00.000Z',
+  updatedAt: '2026-09-25T22:00:00.000Z',
+  deletedAt: null,
+}
+
+const meeting: Meeting = {
+  id: 'm1',
+  title: 'Team sync',
+  date: '2026-09-28',
+  time: '10:00',
+  repeat: 'weekly',
+  createdAt: '2026-09-25T22:00:00.000Z',
+  updatedAt: '2026-09-25T22:00:00.000Z',
+  deletedAt: null,
+}
+
+const note: MeetingNote = {
+  id: 'n1',
+  meetingId: 'm1',
+  date: '2026-09-28',
+  text: 'Ask about the budget',
+  createdAt: '2026-09-25T22:00:00.000Z',
+  updatedAt: '2026-09-25T22:00:00.000Z',
+  deletedAt: null,
+}
+
 describe('record validation', () => {
   it('accepts well-formed records and normalizes timestamps', () => {
     expect(parseCapture({ ...capture, createdAt: '2026-09-25T22:00:00Z' })?.createdAt).toBe('2026-09-25T22:00:00.000Z')
@@ -45,8 +77,25 @@ describe('record validation', () => {
     expect(parseSyncRecord({ type: 'note', value: task })).toBeNull()
   })
 
+  it('accepts calendar events, meetings, and meeting notes', () => {
+    expect(parseEvent(event)).toEqual(event)
+    expect(parseMeeting(meeting)).toEqual(meeting)
+    expect(parseMeeting({ ...meeting, time: undefined, repeat: undefined })).toEqual({ ...meeting, time: null, repeat: null })
+    expect(parseMeetingNote(note)).toEqual(note)
+    expect(parseSyncRecord({ type: 'meetingNote', value: note })).toEqual({ type: 'meetingNote', value: note })
+  })
+
+  it('rejects impossible days, times, and repeats', () => {
+    expect(parseEvent({ ...event, date: '2026-02-30' })).toBeNull()
+    expect(parseEvent({ ...event, text: ' ' })).toBeNull()
+    expect(parseMeeting({ ...meeting, time: '25:00' })).toBeNull()
+    expect(parseMeeting({ ...meeting, repeat: 'daily' })).toBeNull()
+    expect(parseMeeting({ ...meeting, title: 'x'.repeat(201) })).toBeNull()
+    expect(parseMeetingNote({ ...note, meetingId: 'has spaces' })).toBeNull()
+  })
+
   it('merges changes into the on-screen snapshot and removes deletions', () => {
-    const state = mergeRecords({ captures: [], tasks: [] }, [
+    const state = mergeRecords(EMPTY_WORKSPACE, [
       { type: 'capture', value: capture },
       { type: 'task', value: task },
     ])
@@ -54,6 +103,19 @@ describe('record validation', () => {
     const next = mergeRecords(state, [{ type: 'task', value: { ...task, deletedAt: '2026-09-26T00:00:00.000Z' } }])
     expect(next.tasks).toHaveLength(0)
     expect(next.captures).toEqual([capture])
+  })
+
+  it('keeps every record type in its own list and leaves untouched lists as they were', () => {
+    const state = mergeRecords(EMPTY_WORKSPACE, [
+      { type: 'event', value: event },
+      { type: 'meeting', value: meeting },
+      { type: 'meetingNote', value: note },
+    ])
+    expect(state).toMatchObject({ events: [event], meetings: [meeting], meetingNotes: [note] })
+    expect(state.captures).toBe(EMPTY_WORKSPACE.captures)
+    const next = mergeRecords(state, [{ type: 'event', value: { ...event, deletedAt: '2026-09-26T00:00:00.000Z' } }])
+    expect(next.events).toEqual([])
+    expect(next.meetings).toBe(state.meetings)
   })
 })
 
@@ -78,8 +140,34 @@ describe('server merge rules', () => {
     expect(mergeTask(newer, older)).toBeNull()
     expect(mergeTask(older, newer)?.title).toBe('Newer')
     expect(mergeTask(older, { ...newer, captureId: 'other' })?.captureId).toBe('c1')
-    const gone = deletedTask(newer, '2026-09-26T11:00:00.000Z')
+    const gone = deletedRecord({ type: 'task', value: newer }, '2026-09-26T11:00:00.000Z').value as Task
     expect(mergeTask(gone, { ...newer, updatedAt: '2026-09-27T00:00:00.000Z' })).toBeNull()
+  })
+
+  it('applies the same rules to events, meetings, and meeting notes', () => {
+    const later = '2026-09-26T10:00:00.000Z'
+    const stored = { type: 'meeting' as const, value: meeting }
+    expect(mergeRecord(null, stored)).toEqual(stored)
+    expect(mergeRecord(stored, { type: 'meeting', value: { ...meeting, title: 'Weekly sync', updatedAt: later } })?.value).toMatchObject({ title: 'Weekly sync' })
+    expect(mergeRecord(stored, { type: 'meeting', value: { ...meeting, title: 'Stale' } })).toBeNull()
+    const moved = mergeRecord({ type: 'meetingNote', value: note }, { type: 'meetingNote', value: { ...note, meetingId: 'm2', updatedAt: later } })
+    expect(moved?.value).toMatchObject({ meetingId: 'm1' })
+    const deleted = deletedRecord({ type: 'event', value: event }, later)
+    expect(mergeRecord(deleted, { type: 'event', value: { ...event, updatedAt: '2026-09-27T00:00:00.000Z' } })).toBeNull()
+  })
+
+  it('links children to their parents so deletions cascade', () => {
+    expect(parentOf({ type: 'task', value: task })).toEqual({ type: 'capture', id: 'c1' })
+    expect(parentOf({ type: 'meetingNote', value: note })).toEqual({ type: 'meeting', id: 'm1' })
+    expect(parentOf({ type: 'event', value: event })).toBeNull()
+  })
+
+  it('never moves an edit time backwards when deleting', () => {
+    const edited = { ...note, updatedAt: '2026-09-27T00:00:00.000Z' }
+    expect(deletedRecord({ type: 'meetingNote', value: edited }, '2026-09-26T00:00:00.000Z').value).toMatchObject({
+      deletedAt: '2026-09-26T00:00:00.000Z',
+      updatedAt: '2026-09-27T00:00:00.000Z',
+    })
   })
 
   it('gives suggestions stable ids that any later edit overrides', () => {

@@ -1,6 +1,7 @@
 import { ArrowUp, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
 import type { useDictation } from '../../../shared/hooks/useDictation'
+import { MAX_CAPTURE_LENGTH } from '../../../shared/utils/records'
 import TalkButton from '../TalkButton'
 
 const MAX_INPUT_HEIGHT = 200
@@ -22,17 +23,22 @@ function talkHint(phase: Phase, handsFree: boolean): string {
 
 /**
  * Write or talk. Enter sends and Shift+Enter adds a line; the microphone sends what it hears when
- * you let go, or keeps listening hands-free after a tap.
+ * you let go, or keeps listening hands-free after a tap. `placeholder` and `label` say where the
+ * words go: a new note, a calendar day, or a meeting.
  * While `hidden`, it keeps the unsent draft and never leaves the microphone listening.
  */
 export default function Composer({
   inputRef,
   dictation,
+  placeholder,
+  label,
   hidden = false,
   onSend,
 }: {
   inputRef: RefObject<HTMLTextAreaElement | null>
   dictation: ReturnType<typeof useDictation>
+  placeholder: string
+  label: string
   hidden?: boolean
   onSend: (text: string) => Promise<boolean>
 }) {
@@ -91,8 +97,9 @@ export default function Composer({
                 void send()
               }
             }}
-            placeholder="Write a note…"
-            aria-label="New note"
+            placeholder={placeholder}
+            aria-label={label}
+            maxLength={MAX_CAPTURE_LENGTH}
             enterKeyHint="send"
           />
         )}

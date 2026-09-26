@@ -27,8 +27,10 @@ export interface Task {
   suggestionStatus: 'suggested' | 'dismissed' | null
 }
 
-/** `feed` is the Notes view; `archive` holds completed tasks until they expire. */
-export type View = 'feed' | 'tasks' | 'archive'
+/** `feed` is the Notes view; `archive` is the Tasks tab that holds completed tasks until they expire. */
+export type View = 'feed' | 'tasks' | 'archive' | 'calendar' | 'meetings'
+/** Where the composer's words go: a new note, a calendar day, or a meeting day's notes. */
+export type ComposerTarget = { kind: 'note' } | { kind: 'event'; date: string } | { kind: 'meetingNote'; meetingId: string; date: string }
 export type Editor = { captureId: string; task?: Task }
 export type TaskInput = {
   title: string
