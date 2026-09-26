@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Capture, Editor, Task, View } from '../types/task'
 import { VIEW_LABELS } from '../config/views'
-import { countsForViews, dayKey, sectionsForView, selectCaptureData, viewDetail } from '../utils/taskView'
+import { dayKey, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 
 const CLOCK_MS = 60_000
+const NO_SELECTION: ReadonlySet<string> = new Set()
 
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -16,17 +17,19 @@ export interface Confirmation {
   onConfirm: () => Promise<unknown>
 }
 
-/** Which view and dialog are open, search, keyboard shortcuts, and the lists they derive. */
+/** Which view and dialog are open, search, Feed selection, keyboard shortcuts, and the lists they derive. */
 export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
   const [view, setView] = useState<View>('feed')
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [selecting, setSelecting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(NO_SELECTION)
   const [editor, setEditor] = useState<Editor | null>(null)
-  const [accountOpen, setAccountOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  // Changes only when the date does, so Today and Upcoming regroup after midnight.
+  // Changes only when the date does, so day labels and Done today roll over after midnight.
   const [today, setToday] = useState(() => dayKey(new Date().toISOString()))
 
   useEffect(() => {
@@ -45,9 +48,30 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
     setSearch('')
   }
 
+  function startSelecting() {
+    setSelectedIds(NO_SELECTION)
+    setSelecting(true)
+  }
+
+  function stopSelecting() {
+    setSelecting(false)
+    setSelectedIds(NO_SELECTION)
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
+
   function selectView(next: View) {
     setView(next)
-    if (next !== 'feed') closeSearch()
+    if (next !== 'feed') {
+      closeSearch()
+      stopSelecting()
+    }
   }
 
   useEffect(() => {
@@ -61,15 +85,20 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
         composerRef.current?.focus()
       } else if (event.key === 'Escape' && searchOpen) {
         closeSearch()
+      } else if (event.key === 'Escape' && selecting) {
+        stopSelecting()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [searchOpen])
+  }, [searchOpen, selecting])
 
   const feed = useMemo(() => selectCaptureData(captures, tasks, search), [captures, tasks, search, today])
-  const sections = useMemo(() => (view === 'feed' ? [] : sectionsForView(tasks, view)), [tasks, view, today])
-  const counts = useMemo(() => countsForViews(tasks), [tasks, today])
+  // Only messages still on screen count, so a search or another device's deletion never widens a delete.
+  const selectedCaptures = useMemo(() => feed.captures.filter((capture) => selectedIds.has(capture.id)), [feed, selectedIds])
+  const allSelected = feed.captures.length > 0 && selectedCaptures.length === feed.captures.length
+  const sections = useMemo(() => (view === 'tasks' ? taskSections(tasks) : []), [tasks, view, today])
+  const taskCount = useMemo(() => openTaskCount(tasks), [tasks])
   const detail = viewDetail(view, search.trim() ? feed.matchCount : null)
 
   return {
@@ -81,18 +110,27 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
     setSearch,
     openSearch,
     closeSearch,
+    selecting,
+    /** Undefined when there is nothing to select. */
+    toggleSelecting: selecting ? stopSelecting : view === 'feed' && captures.length ? startSelecting : undefined,
+    stopSelecting,
+    toggleSelected,
+    selectedIds,
+    selectedCaptures,
+    allSelected,
+    toggleSelectAll: () => setSelectedIds(allSelected ? NO_SELECTION : new Set(feed.captures.map((capture) => capture.id))),
     title: VIEW_LABELS[view],
     detail,
     editor,
     setEditor,
-    accountOpen,
-    setAccountOpen,
+    settingsOpen,
+    setSettingsOpen,
     confirmation,
     setConfirmation,
     composerRef,
     searchRef,
     feed,
     sections,
-    counts,
+    taskCount,
   }
 }

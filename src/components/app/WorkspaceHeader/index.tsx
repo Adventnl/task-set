@@ -1,9 +1,12 @@
-import { Search, X } from 'lucide-react'
+import { ListChecks, Search, X } from 'lucide-react'
 import type { RefObject } from 'react'
 import type { SyncStatus as Status } from '../../../shared/types/sync'
 import SyncStatus from '../SyncStatus'
 
-/** View title with search. On phones it also carries the sync state, since the rail is hidden. */
+/**
+ * View title with search and, in the Feed, message selection. On phones it also carries the
+ * sync state and settings, since the rail is hidden.
+ */
 export default function WorkspaceHeader({
   title,
   detail,
@@ -11,10 +14,12 @@ export default function WorkspaceHeader({
   searchOpen,
   search,
   searchRef,
+  selecting,
   onSearchChange,
   onOpenSearch,
   onCloseSearch,
-  onOpenAccount,
+  onToggleSelecting,
+  onOpenSettings,
 }: {
   title: string
   detail: string
@@ -22,10 +27,13 @@ export default function WorkspaceHeader({
   searchOpen: boolean
   search: string
   searchRef: RefObject<HTMLInputElement | null>
+  selecting: boolean
   onSearchChange: (value: string) => void
   onOpenSearch: () => void
   onCloseSearch: () => void
-  onOpenAccount: () => void
+  /** Omitted when there is nothing to select. */
+  onToggleSelecting?: () => void
+  onOpenSettings: () => void
 }) {
   return (
     <header className="workspace-header">
@@ -35,8 +43,20 @@ export default function WorkspaceHeader({
       </div>
       <div className="workspace-tools">
         <div className="mobile-only">
-          <SyncStatus status={status} compact onOpen={onOpenAccount} />
+          <SyncStatus status={status} compact onOpen={onOpenSettings} />
         </div>
+        {onToggleSelecting && (
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onToggleSelecting}
+            aria-pressed={selecting}
+            aria-label="Select messages"
+            title={selecting ? 'Stop selecting (Esc)' : 'Select messages'}
+          >
+            <ListChecks size={18} />
+          </button>
+        )}
         {searchOpen ? (
           <div className="search-field">
             <Search size={16} aria-hidden="true" />

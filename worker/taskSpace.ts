@@ -125,7 +125,7 @@ export class TaskSpace extends DurableObject<Env> {
     }
     let suggestions: Suggestion[]
     try {
-      suggestions = await extractSuggestions(this.env.AI, capture)
+      suggestions = await extractSuggestions(this.env, capture)
     } catch (error) {
       this.recordFailure(job, error)
       return

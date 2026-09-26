@@ -1,31 +1,34 @@
-/* Task Set design system. Tokens first; every component rule below uses them. */
-
+/*
+ * Task Set design system. Tokens first; every component rule below uses them.
+ * Each color is written once as light-dark(light, dark). The page follows the system setting
+ * unless Settings fixes an appearance, which sets data-theme on <html>.
+ */
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
 
-  --canvas: #fbfbfa;
-  --surface: #ffffff;
-  --surface-hover: #f2f2f0;
-  --surface-selected: #ebebe8;
-  --text: #1d1d1f;
-  --text-secondary: #56585e;
-  --text-muted: #6c6f75;
-  --line: #e7e6e3;
-  --line-strong: #d4d3cf;
-  --accent: #2459c4;
-  --accent-hover: #1c4aa6;
-  --accent-soft: #ebf1fc;
-  --accent-soft-hover: #dce7fa;
-  --on-accent: #ffffff;
-  --danger: #b3261e;
-  --danger-soft: #fcebea;
-  --recording: #c9352b;
-  --status-good: #2f8a55;
-  --status-wait: #a8741a;
-  --backdrop: rgb(20 20 22 / 0.32);
-  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 20px rgb(0 0 0 / 0.06);
-  --shadow-dialog: 0 24px 60px rgb(0 0 0 / 0.18);
+  --canvas: light-dark(#fbfbfa, #161618);
+  --surface: light-dark(#ffffff, #1f1f22);
+  --surface-hover: light-dark(#f2f2f0, #28282c);
+  --surface-selected: light-dark(#ebebe8, #2e2e33);
+  --text: light-dark(#1d1d1f, #ededf0);
+  --text-secondary: light-dark(#56585e, #b4b4ba);
+  --text-muted: light-dark(#6c6f75, #9b9ba2);
+  --line: light-dark(#e7e6e3, #2c2c31);
+  --line-strong: light-dark(#d4d3cf, #3b3b41);
+  --accent: light-dark(#2459c4, #7aa7ff);
+  --accent-hover: light-dark(#1c4aa6, #9dbdff);
+  --accent-soft: light-dark(#ebf1fc, #1c2940);
+  --accent-soft-hover: light-dark(#dce7fa, #243452);
+  --on-accent: light-dark(#ffffff, #0c1526);
+  --danger: light-dark(#b3261e, #ff8f86);
+  --danger-soft: light-dark(#fcebea, #3b1f1d);
+  --recording: light-dark(#c9352b, #ff6b60);
+  --status-good: light-dark(#2f8a55, #5cc58a);
+  --status-wait: light-dark(#a8741a, #e0ad4f);
+  --backdrop: light-dark(rgb(20 20 22 / 0.32), rgb(0 0 0 / 0.55));
+  --shadow-float: 0 1px 2px light-dark(rgb(0 0 0 / 0.04), rgb(0 0 0 / 0.3)), 0 6px 20px light-dark(rgb(0 0 0 / 0.06), transparent);
+  --shadow-dialog: 0 24px 60px light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.5));
 
   --space-1: 4px;
   --space-2: 8px;
@@ -65,32 +68,12 @@
   -webkit-text-size-adjust: 100%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --canvas: #161618;
-    --surface: #1f1f22;
-    --surface-hover: #28282c;
-    --surface-selected: #2e2e33;
-    --text: #ededf0;
-    --text-secondary: #b4b4ba;
-    --text-muted: #9b9ba2;
-    --line: #2c2c31;
-    --line-strong: #3b3b41;
-    --accent: #7aa7ff;
-    --accent-hover: #9dbdff;
-    --accent-soft: #1c2940;
-    --accent-soft-hover: #243452;
-    --on-accent: #0c1526;
-    --danger: #ff8f86;
-    --danger-soft: #3b1f1d;
-    --recording: #ff6b60;
-    --status-good: #5cc58a;
-    --status-wait: #e0ad4f;
-    --backdrop: rgb(0 0 0 / 0.55);
-    --shadow-float: 0 1px 2px rgb(0 0 0 / 0.3);
-    --shadow-dialog: 0 24px 60px rgb(0 0 0 / 0.5);
-  }
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 @media (pointer: coarse) {
@@ -143,8 +126,20 @@ button:disabled {
 
 h1,
 h2,
+h3,
 p {
   margin: 0;
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  padding: 0;
 }
 
 .sr-only {
@@ -260,6 +255,7 @@ p {
   background: var(--surface-hover);
   color: var(--text);
 }
+
 
 .link-button {
   min-height: var(--control);
@@ -436,6 +432,18 @@ p {
   color: var(--text);
 }
 
+.sync-settings-icon {
+  flex: none;
+}
+
+.rail-footer .sync-status {
+  width: 100%;
+}
+
+.rail-footer .sync-settings-icon {
+  margin-left: auto;
+}
+
 .sync-dot {
   width: 8px;
   height: 8px;
@@ -495,6 +503,11 @@ p {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+.workspace-tools .icon-button[aria-pressed='true'] {
+  background: var(--surface-selected);
+  color: var(--accent);
 }
 
 .search-field {
@@ -637,6 +650,40 @@ p {
   .capture-more {
     opacity: 1;
   }
+}
+
+.capture.is-selectable {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  cursor: pointer;
+}
+
+.select-check {
+  /* Centers the box on the 28px time row above the message. */
+  margin-top: calc((28px - var(--touch)) / 2);
+}
+
+.select-check .task-check-box {
+  border-radius: 50%;
+}
+
+.capture.is-selectable:hover .select-check .task-check-box {
+  border-color: var(--accent);
+}
+
+.select-check[aria-checked='true'] .task-check-box {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.capture-main {
+  min-width: 0;
+}
+
+/* Suggestions and tasks cannot be used while selecting, so they recede behind the message. */
+.capture.is-selectable .capture-extras {
+  opacity: 0.55;
 }
 
 .capture-text {
@@ -828,6 +875,29 @@ p {
   text-decoration: line-through;
 }
 
+.task-pin {
+  width: var(--control);
+  height: var(--touch);
+  margin-right: calc(-1 * var(--space-2));
+  opacity: 0;
+}
+
+.task-row:hover .task-pin,
+.task-pin:focus-visible,
+.task-pin[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.task-pin[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+@media (hover: none) {
+  .task-pin {
+    opacity: 1;
+  }
+}
+
 .task-meta {
   display: flex;
   flex-wrap: wrap;
@@ -849,7 +919,8 @@ p {
 
 /* ---------- Composer ---------- */
 
-.composer-dock {
+.composer-dock,
+.selection-dock {
   width: min(100% - 2 * var(--gutter), var(--column));
   margin: 0 auto;
   padding: var(--space-2) 0 max(var(--space-4), env(safe-area-inset-bottom));
@@ -957,7 +1028,34 @@ p {
   }
 }
 
-.composer-hint {
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.selection-count {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.selection-bar .button {
+  min-height: var(--touch);
+}
+
+.composer-hint,
+.selection-hint {
   min-height: 20px;
   margin-top: var(--space-2);
   padding: 0 var(--space-4);
@@ -1046,6 +1144,53 @@ p {
 
 .modal-actions .button-danger-text {
   margin-right: auto;
+}
+
+.settings-section {
+  margin-top: var(--space-5);
+}
+
+.settings-section .modal-text {
+  margin-top: 0;
+}
+
+.segmented {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+}
+
+.segmented-option {
+  min-height: var(--control);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--fast) ease, color var(--fast) ease;
+}
+
+.segmented-option:hover {
+  color: var(--text);
+}
+
+.segmented-option:has(:checked) {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-float), inset 0 0 0 1px var(--line-strong);
+}
+
+.segmented-option:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .sync-detail {
@@ -1148,14 +1293,24 @@ p {
   }
 
   .sync-status-compact {
+    position: relative;
     width: var(--touch);
     height: var(--touch);
     justify-content: center;
     padding: 0;
   }
 
+  /* The sync dot becomes a badge on the settings icon. */
+  .sync-status-compact .sync-dot {
+    position: absolute;
+    top: 10px;
+    right: 9px;
+    box-shadow: 0 0 0 2px var(--canvas);
+  }
+
+  /* Leaves room for the title, settings, and select buttons beside it. */
   .search-field {
-    width: min(240px, 100vw - 150px);
+    width: min(240px, 100vw - 194px);
   }
 
   .view-nav-tabs {
@@ -1208,6 +1363,18 @@ p {
 
   .suggestion-actions {
     margin-left: calc(-1 * var(--space-3));
+  }
+}
+
+/* The smallest phones keep the count readable by showing Delete as its icon alone. */
+@media (max-width: 380px) {
+  .selection-delete {
+    width: var(--touch);
+    padding: 0;
+  }
+
+  .selection-delete-label {
+    display: none;
   }
 }
 

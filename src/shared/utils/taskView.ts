@@ -1,8 +1,8 @@
-import type { Capture, Editor, Task, TaskInput, TaskView, View } from '../types/task'
+import type { Capture, Editor, Task, TaskInput, View } from '../types/task'
 
 export interface TaskSection {
-  id: string
-  label: string | null
+  id: 'pinned' | 'undated' | 'scheduled' | 'done'
+  label: string
   tasks: Task[]
 }
 
@@ -83,81 +83,41 @@ function isOpen(task: Task): boolean {
   return !task.completedAt && !task.suggestionStatus
 }
 
-function endOfToday(now: Date): Date {
-  const end = new Date(now)
-  end.setHours(23, 59, 59, 999)
-  return end
-}
-
-function byWhen(a: Task, b: Task): number {
+/** Undated tasks first, newest first; then dated tasks, soonest first. */
+function byTaskOrder(a: Task, b: Task): number {
   const aWhen = taskWhen(a)
   const bWhen = taskWhen(b)
   if (aWhen && bWhen) return aWhen.localeCompare(bWhen)
-  if (aWhen) return -1
-  if (bWhen) return 1
+  if (aWhen) return 1
+  if (bWhen) return -1
   return b.createdAt.localeCompare(a.createdAt)
 }
 
-/**
- * Today: pinned work and anything scheduled up to the end of today.
- * Inbox: open work with no date. Upcoming: open work scheduled after today.
- */
-export function tasksForView(tasks: Task[], view: TaskView, now = new Date()): Task[] {
-  const end = endOfToday(now)
-  return tasks
-    .filter((task) => {
-      if (!isOpen(task)) return false
-      const when = taskWhen(task)
-      if (view === 'today') return task.pinned || (!!when && new Date(when) <= end)
-      if (view === 'inbox') return !task.pinned && !when
-      return !task.pinned && !!when && new Date(when) > end
-    })
-    .sort(byWhen)
-}
-
-export function sectionsForView(tasks: Task[], view: TaskView, now = new Date()): TaskSection[] {
-  const open = tasksForView(tasks, view, now)
-  if (view === 'inbox') return open.length ? [{ id: 'inbox', label: null, tasks: open }] : []
-  if (view === 'upcoming') {
-    const days = new Map<string, TaskSection>()
-    for (const task of open) {
-      const when = taskWhen(task) as string
-      const key = dayKey(when)
-      const section = days.get(key) ?? { id: key, label: dayLabel(when, now), tasks: [] }
-      section.tasks.push(task)
-      days.set(key, section)
-    }
-    return [...days.values()]
-  }
+/** Tasks: pinned work, then open work with no date, then scheduled work, then what was finished today. */
+export function taskSections(tasks: Task[], now = new Date()): TaskSection[] {
+  const open = tasks.filter(isOpen).sort(byTaskOrder)
   const today = startOfDay(now)
   const doneToday = tasks
     .filter((task) => !task.suggestionStatus && task.completedAt && new Date(task.completedAt) >= today)
     .sort((a, b) => (b.completedAt as string).localeCompare(a.completedAt as string))
   const sections: TaskSection[] = [
-    { id: 'overdue', label: 'Overdue', tasks: open.filter((task) => isOverdue(task, now)) },
-    { id: 'today', label: 'Today', tasks: open.filter((task) => !isOverdue(task, now)) },
+    { id: 'pinned', label: 'Pinned', tasks: open.filter((task) => task.pinned) },
+    { id: 'undated', label: 'No date', tasks: open.filter((task) => !task.pinned && !taskWhen(task)) },
+    { id: 'scheduled', label: 'Scheduled', tasks: open.filter((task) => !task.pinned && taskWhen(task)) },
     { id: 'done', label: 'Done today', tasks: doneToday },
-  ].filter((section) => section.tasks.length)
-  // The view is already titled Today; a lone Today section needs no second heading.
-  return sections.length === 1 && sections[0].id === 'today' ? [{ ...sections[0], label: null }] : sections
+  ]
+  return sections.filter((section) => section.tasks.length)
 }
 
-export function countsForViews(tasks: Task[], now = new Date()): Record<TaskView, number> {
-  return {
-    today: tasksForView(tasks, 'today', now).length,
-    inbox: tasksForView(tasks, 'inbox', now).length,
-    upcoming: tasksForView(tasks, 'upcoming', now).length,
-  }
+export function openTaskCount(tasks: Task[]): number {
+  return tasks.filter(isOpen).length
 }
 
 /** The line under a view's title. `matches` is set while searching the Feed. */
-export function viewDetail(view: View, matches: number | null, now = new Date()): string {
-  if (view === 'feed') {
-    if (matches === null) return 'Everything you’ve said, newest last'
-    return `${matches} matching message${matches === 1 ? '' : 's'}`
-  }
-  if (view === 'today') return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(now)
-  return view === 'inbox' ? 'Tasks without a date' : 'Scheduled after today'
+export function viewDetail(view: View, matches: number | null): string {
+  if (view === 'tasks') return 'Pinned first, then undated, then by date'
+  if (matches === null) return 'Everything you’ve said, newest last'
+  return `${matches} matching message${matches === 1 ? '' : 's'}`
 }
 
 /** Links visible tasks to captures, filters by search, and groups captures by day. */
@@ -183,7 +143,7 @@ export function selectCaptureData(captures: Capture[], tasks: Task[], search: st
     if (days.at(-1)?.key !== key) days.push({ key, label: dayLabel(capture.createdAt), captures: [] })
     days[days.length - 1].captures.push(capture)
   }
-  return { days, tasksByCapture, matchCount: visibleCaptures.length }
+  return { days, captures: visibleCaptures, tasksByCapture, matchCount: visibleCaptures.length }
 }
 
 /** Saving from the editor also accepts a suggestion, since the user has reviewed it. */

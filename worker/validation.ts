@@ -62,15 +62,14 @@ function schedule(item: object, context: Context): Pick<Suggestion, 'dueAt' | 'r
 }
 
 /**
- * Validates model output against the source text. Suggestions that cannot be traced to a quote
- * in the capture are dropped; a malformed response as a whole is an error.
+ * Validates a model's answer, as parsed JSON or JSON text, against the source text. Suggestions
+ * that cannot be traced to a quote in the capture are dropped; a malformed answer is an error.
  */
-export function parseSuggestions(raw: unknown, sourceText: string, timeZone: string, writtenAt: string): Suggestion[] {
-  const response = raw && typeof raw === 'object' && 'response' in raw ? raw.response : null
-  let value: unknown = response
-  if (typeof response === 'string') {
+export function parseSuggestions(answer: unknown, sourceText: string, timeZone: string, writtenAt: string): Suggestion[] {
+  let value = answer
+  if (typeof answer === 'string') {
     try {
-      value = JSON.parse(response)
+      value = JSON.parse(answer)
     } catch {
       throw new Error('AI response was not JSON')
     }

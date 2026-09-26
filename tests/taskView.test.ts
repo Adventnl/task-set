@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Capture, Task } from '../src/shared/types/task'
-import { sectionsForView, selectCaptureData, taskFromEditor, tasksForView, whenLabel } from '../src/shared/utils/taskView'
+import { openTaskCount, selectCaptureData, taskFromEditor, taskSections, whenLabel } from '../src/shared/utils/taskView'
 
 const capture = (id: string, text: string, createdAt: string): Capture => ({
   id,
@@ -55,7 +55,7 @@ describe('task editor', () => {
   })
 })
 
-describe('task views', () => {
+describe('task sections', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-26T12:00:00'))
@@ -64,31 +64,33 @@ describe('task views', () => {
 
   const rows: Task[] = [
     { ...base, id: 'overdue', dueAt: '2026-09-25T09:00:00' },
+    { ...base, id: 'pinned-dated', pinned: true, dueAt: '2026-09-30T09:00:00' },
     { ...base, id: 'pinned', pinned: true },
-    { ...base, id: 'remind-today', reminderAt: '2026-09-26T18:00:00' },
-    { ...base, id: 'inbox' },
+    { ...base, id: 'undated-old', createdAt: '2026-09-20T00:00:00.000Z' },
+    { ...base, id: 'undated-new', createdAt: '2026-09-26T00:00:00.000Z' },
     { ...base, id: 'future', dueAt: '2026-09-28T09:00:00' },
     { ...base, id: 'remind-tomorrow', reminderAt: '2026-09-27T09:00:00' },
     { ...base, id: 'draft', suggestionStatus: 'suggested' },
     { ...base, id: 'done', completedAt: '2026-09-26T08:00:00' },
+    { ...base, id: 'done-yesterday', completedAt: '2026-09-25T08:00:00' },
   ]
 
-  it('schedules by due date or, failing that, reminder', () => {
-    expect(tasksForView(rows, 'today').map(({ id }) => id)).toEqual(['overdue', 'remind-today', 'pinned'])
-    expect(tasksForView(rows, 'inbox').map(({ id }) => id)).toEqual(['inbox'])
-    expect(tasksForView(rows, 'upcoming').map(({ id }) => id)).toEqual(['remind-tomorrow', 'future'])
-  })
-
-  it('splits Today into overdue, today, and done', () => {
-    expect(sectionsForView(rows, 'today').map((section) => [section.label, section.tasks.map(({ id }) => id)])).toEqual([
-      ['Overdue', ['overdue']],
-      ['Today', ['remind-today', 'pinned']],
+  it('puts pinned work first, then undated work newest first, then dated work soonest first', () => {
+    expect(taskSections(rows).map((section) => [section.label, section.tasks.map(({ id }) => id)])).toEqual([
+      ['Pinned', ['pinned', 'pinned-dated']],
+      ['No date', ['undated-new', 'undated-old']],
+      ['Scheduled', ['overdue', 'remind-tomorrow', 'future']],
       ['Done today', ['done']],
     ])
   })
 
-  it('groups Upcoming by day with relative labels', () => {
-    expect(sectionsForView(rows, 'upcoming').map((section) => section.label)).toEqual(['Tomorrow', expect.stringMatching(/Monday/)])
+  it('omits empty sections and counts only open tasks', () => {
+    expect(taskSections([{ ...base, id: 'only' }]).map((section) => section.id)).toEqual(['undated'])
+    expect(taskSections([])).toEqual([])
+    expect(openTaskCount(rows)).toBe(7)
+  })
+
+  it('labels dates relative to today', () => {
     expect(whenLabel('2026-09-27T09:00:00')).toMatch(/^Tomorrow /)
   })
 })

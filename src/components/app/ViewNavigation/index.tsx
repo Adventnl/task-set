@@ -1,30 +1,28 @@
-import { CalendarClock, CalendarDays, Inbox, MessageSquareText, type LucideIcon } from 'lucide-react'
+import { ListTodo, MessageSquareText, type LucideIcon } from 'lucide-react'
 import { VIEW_LABELS } from '../../../shared/config/views'
-import type { TaskView, View } from '../../../shared/types/task'
+import type { View } from '../../../shared/types/task'
 
 const items: { id: View; icon: LucideIcon }[] = [
   { id: 'feed', icon: MessageSquareText },
-  { id: 'today', icon: CalendarDays },
-  { id: 'inbox', icon: Inbox },
-  { id: 'upcoming', icon: CalendarClock },
+  { id: 'tasks', icon: ListTodo },
 ]
 
-/** The four views, as a vertical list in the rail or as tabs above the content on phones. */
+/** Feed and Tasks, as a vertical list in the rail or as tabs above the content on phones. */
 export default function ViewNavigation({
   view,
-  counts,
+  taskCount,
   variant,
   onSelect,
 }: {
   view: View
-  counts: Record<TaskView, number>
+  taskCount: number
   variant: 'rail' | 'tabs'
   onSelect: (view: View) => void
 }) {
   return (
     <nav className={`view-nav view-nav-${variant}`} aria-label="Views">
       {items.map(({ id, icon: Icon }) => {
-        const count = id === 'feed' ? 0 : counts[id]
+        const count = id === 'tasks' ? taskCount : 0
         return (
           <button
             key={id}

@@ -1,22 +1,25 @@
 import { useRef } from 'react'
-import AccountDialog from '../../components/app/AccountDialog'
 import ConfirmDialog from '../../components/app/ConfirmDialog'
 import NavigationRail from '../../components/app/NavigationRail'
 import Notice from '../../components/app/Notice'
+import SettingsDialog from '../../components/app/SettingsDialog'
 import ViewNavigation from '../../components/app/ViewNavigation'
 import WorkspaceHeader from '../../components/app/WorkspaceHeader'
 import SignInScreen from '../../components/auth/SignInScreen'
 import CaptureFeed from '../../components/capture/CaptureFeed'
 import type { CaptureActions } from '../../components/capture/CaptureRow'
 import Composer from '../../components/capture/Composer'
+import SelectionBar from '../../components/capture/SelectionBar'
 import TaskEditor from '../../components/task/TaskEditor'
 import TaskList from '../../components/task/TaskList'
+import { useAppearance } from '../../shared/hooks/useAppearance'
 import { useDictation } from '../../shared/hooks/useDictation'
 import { useTaskSet } from '../../shared/hooks/useTaskSet'
 import { useWorkspaceView } from '../../shared/hooks/useWorkspaceView'
 import type { Capture, Task } from '../../shared/types/task'
 
 export default function TaskSetScreen() {
+  const appearance = useAppearance()
   const data = useTaskSet()
   const ui = useWorkspaceView(data.captures, data.tasks)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -30,6 +33,7 @@ export default function TaskSetScreen() {
   if (data.sync.status === 'signed-out') return <SignInScreen onSignIn={data.sync.signIn} />
 
   const editTask = (task: Task) => ui.setEditor({ captureId: task.captureId, task })
+  const openSettings = () => ui.setSettingsOpen(true)
   const confirmDeleteTask = (task: Task) =>
     ui.setConfirmation({
       title: 'Delete this task?',
@@ -37,6 +41,17 @@ export default function TaskSetScreen() {
       confirmLabel: 'Delete task',
       onConfirm: () => data.deleteTask(task),
     })
+  const confirmDeleteCaptures = (captures: Capture[]) => {
+    const one = captures.length === 1
+    ui.setConfirmation({
+      title: one ? 'Delete this message?' : `Delete ${captures.length} messages?`,
+      message: `Tasks made from ${one ? 'it' : 'them'} are deleted too, on every device.`,
+      confirmLabel: one ? 'Delete message' : `Delete ${captures.length} messages`,
+      onConfirm: async () => {
+        if (await data.deleteCaptures(captures)) ui.stopSelecting()
+      },
+    })
+  }
   const actions: CaptureActions = {
     onToggleTask: (task) => void data.toggleTask(task),
     onEditTask: editTask,
@@ -44,19 +59,14 @@ export default function TaskSetScreen() {
     onDismissSuggestion: (task) => void data.reviewSuggestion(task, 'dismiss'),
     onCreateTask: (capture) => ui.setEditor({ captureId: capture.id }),
     onRetry: (capture) => void data.retrySuggestions(capture),
-    onDelete: (capture) =>
-      ui.setConfirmation({
-        title: 'Delete this message?',
-        message: 'Tasks made from it are deleted too, on every device.',
-        confirmLabel: 'Delete message',
-        onConfirm: () => data.deleteCapture(capture),
-      }),
+    onDelete: (capture) => confirmDeleteCaptures([capture]),
+    onToggleSelected: (capture) => ui.toggleSelected(capture.id),
   }
   const editor = ui.editor
 
   return (
     <div className="app">
-      <NavigationRail view={ui.view} counts={ui.counts} status={data.sync.status} onSelect={ui.selectView} onOpenAccount={() => ui.setAccountOpen(true)} />
+      <NavigationRail view={ui.view} taskCount={ui.taskCount} status={data.sync.status} onSelect={ui.selectView} onOpenSettings={openSettings} />
       <main className="workspace">
         <WorkspaceHeader
           title={ui.title}
@@ -65,23 +75,46 @@ export default function TaskSetScreen() {
           searchOpen={ui.searchOpen}
           search={ui.search}
           searchRef={ui.searchRef}
+          selecting={ui.selecting}
           onSearchChange={ui.setSearch}
           onOpenSearch={ui.openSearch}
           onCloseSearch={ui.closeSearch}
-          onOpenAccount={() => ui.setAccountOpen(true)}
+          onToggleSelecting={ui.toggleSelecting}
+          onOpenSettings={openSettings}
         />
-        <ViewNavigation view={ui.view} counts={ui.counts} variant="tabs" onSelect={ui.selectView} />
+        <ViewNavigation view={ui.view} taskCount={ui.taskCount} variant="tabs" onSelect={ui.selectView} />
         <div className="workspace-scroll" ref={scrollRef}>
           <div className="column">
             {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
             {data.loading ? null : ui.view === 'feed' ? (
-              <CaptureFeed days={ui.feed.days} tasksByCapture={ui.feed.tasksByCapture} search={ui.search.trim()} scrollRef={scrollRef} actions={actions} />
+              <CaptureFeed
+                days={ui.feed.days}
+                tasksByCapture={ui.feed.tasksByCapture}
+                search={ui.search.trim()}
+                selectedIds={ui.selecting ? ui.selectedIds : null}
+                scrollRef={scrollRef}
+                actions={actions}
+              />
             ) : (
-              <TaskList view={ui.view} sections={ui.sections} onToggle={(task) => void data.toggleTask(task)} onEdit={editTask} />
+              <TaskList
+                sections={ui.sections}
+                onToggle={(task) => void data.toggleTask(task)}
+                onEdit={editTask}
+                onTogglePin={(task) => void data.togglePin(task)}
+              />
             )}
           </div>
         </div>
-        <Composer inputRef={ui.composerRef} dictation={dictation} onSend={(text) => send(text, 'text')} />
+        {ui.selecting && (
+          <SelectionBar
+            count={ui.selectedCaptures.length}
+            allSelected={ui.allSelected}
+            onToggleAll={ui.toggleSelectAll}
+            onDelete={() => confirmDeleteCaptures(ui.selectedCaptures)}
+            onCancel={ui.stopSelecting}
+          />
+        )}
+        <Composer inputRef={ui.composerRef} dictation={dictation} hidden={ui.selecting} onSend={(text) => send(text, 'text')} />
       </main>
 
       {editor && (
@@ -98,13 +131,16 @@ export default function TaskSetScreen() {
         />
       )}
       {ui.confirmation && <ConfirmDialog {...ui.confirmation} onClose={() => ui.setConfirmation(null)} />}
-      {ui.accountOpen && (
-        <AccountDialog
+      {ui.settingsOpen && (
+        <SettingsDialog
+          appearance={appearance.appearance}
+          appearanceSaveFailed={appearance.saveFailed}
           status={data.sync.status}
           message={data.sync.message}
           countUnsynced={data.sync.unsyncedChangeCount}
+          onAppearanceChange={appearance.chooseAppearance}
           onSignOut={data.sync.signOut}
-          onClose={() => ui.setAccountOpen(false)}
+          onClose={() => ui.setSettingsOpen(false)}
         />
       )}
       <div className="sr-only" role="status" aria-live="polite">

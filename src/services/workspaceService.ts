@@ -29,12 +29,13 @@ export function createCapture(text: string, kind: Capture['kind']): Promise<Sync
   return save([{ type: 'capture', value }])
 }
 
-/** Deletes a capture together with the tasks made from it. */
-export function deleteCapture(capture: Capture, linkedTasks: Task[]): Promise<SyncRecord[]> {
+/** Deletes captures together with the tasks made from them, in one local save. */
+export function deleteCaptures(captures: Capture[], tasks: Task[]): Promise<SyncRecord[]> {
   const now = new Date().toISOString()
+  const ids = new Set(captures.map((capture) => capture.id))
   return save([
-    { type: 'capture', value: { ...capture, deletedAt: now, updatedAt: now } },
-    ...linkedTasks.map((task) => taskRecord({ ...task, deletedAt: now, updatedAt: now })),
+    ...captures.map((capture): SyncRecord => ({ type: 'capture', value: { ...capture, deletedAt: now, updatedAt: now } })),
+    ...tasks.filter((task) => ids.has(task.captureId)).map((task) => taskRecord({ ...task, deletedAt: now, updatedAt: now })),
   ])
 }
 
@@ -50,6 +51,10 @@ export function deleteTask(task: Task): Promise<SyncRecord[]> {
 export function setTaskCompleted(task: Task, completed: boolean): Promise<SyncRecord[]> {
   const now = new Date().toISOString()
   return save([taskRecord({ ...task, completedAt: completed ? now : null, updatedAt: now })])
+}
+
+export function setTaskPinned(task: Task, pinned: boolean): Promise<SyncRecord[]> {
+  return save([taskRecord({ ...task, pinned, updatedAt: new Date().toISOString() })])
 }
 
 export function reviewSuggestion(task: Task, action: 'accept' | 'dismiss'): Promise<SyncRecord[]> {

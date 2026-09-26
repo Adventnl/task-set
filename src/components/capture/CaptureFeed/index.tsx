@@ -10,12 +10,15 @@ export default function CaptureFeed({
   days,
   tasksByCapture,
   search,
+  selectedIds,
   scrollRef,
   actions,
 }: {
   days: CaptureDay[]
   tasksByCapture: Map<string, Task[]>
   search: string
+  /** Null unless messages are being selected. */
+  selectedIds: ReadonlySet<string> | null
   scrollRef: RefObject<HTMLDivElement | null>
   actions: CaptureActions
 }) {
@@ -59,7 +62,13 @@ export default function CaptureFeed({
         <section key={day.key} className="feed-day">
           <h2 className="day-label">{day.label}</h2>
           {day.captures.map((capture) => (
-            <CaptureRow key={capture.id} capture={capture} tasks={tasksByCapture.get(capture.id) ?? []} actions={actions} />
+            <CaptureRow
+              key={capture.id}
+              capture={capture}
+              tasks={tasksByCapture.get(capture.id) ?? []}
+              selected={selectedIds ? selectedIds.has(capture.id) : null}
+              actions={actions}
+            />
           ))}
         </section>
       ))}

@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Check, Pin } from 'lucide-react'
 import type { Task } from '../../../shared/types/task'
 import TaskMeta from '../TaskMeta'
 
@@ -6,11 +6,14 @@ export default function TaskRow({
   task,
   onToggle,
   onEdit,
+  onTogglePin,
   linked = false,
 }: {
   task: Task
   onToggle: (task: Task) => void
   onEdit: (task: Task) => void
+  /** Shows a pin toggle; task lists pass it, rows under a message do not. */
+  onTogglePin?: (task: Task) => void
   /** Shown under its source message rather than in a task list. */
   linked?: boolean
 }) {
@@ -33,6 +36,18 @@ export default function TaskRow({
         <span className="task-title">{task.title}</span>
         <TaskMeta task={task} />
       </button>
+      {onTogglePin && (
+        <button
+          className="icon-button task-pin"
+          type="button"
+          aria-pressed={task.pinned}
+          onClick={() => onTogglePin(task)}
+          aria-label={`Pin “${task.title}”`}
+          title={task.pinned ? 'Unpin' : 'Pin to the top'}
+        >
+          <Pin size={16} fill={task.pinned ? 'currentColor' : 'none'} />
+        </button>
+      )}
     </div>
   )
 }

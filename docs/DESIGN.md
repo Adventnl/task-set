@@ -8,15 +8,17 @@ Task Set should feel like an empty sheet that is always ready for the next thoug
 
 ## Screen structure
 
-At desktop width, use a narrow navigation rail and one reading column. Leave the remaining width as open canvas. The rail contains **Feed**, **Today**, **Inbox**, and **Upcoming**, followed by a small account or local-data status area when those features exist. The main column is approximately 640–720 px wide. Its heading names the current view; avoid dashboards, metrics, and decorative hero content.
+At desktop width, use a narrow navigation rail and one reading column. Leave the remaining width as open canvas. The rail contains **Feed** and **Tasks**, followed by the sync status, which opens Settings. The main column is approximately 640–720 px wide. Its heading names the current view; avoid dashboards, metrics, and decorative hero content.
 
 The Feed is a chronological record of captures. Show the original text in a readable row with a quiet time label and a thin divider. New captures appear at the end and remain visible after sending. Do not turn each message into a large floating card or chat bubble. A capture can expand to reveal linked manual tasks, suggested task drafts, a transcript, or a retry action. Those details remain visually subordinate to the source text.
 
-Keep the composer at the bottom of the main column on every view, so talking or typing is always one action away. It is a single rounded field with one primary button: a microphone while the field is empty, and Send once there is text. The empty Feed shows one short invitation to capture a thought, with the composer already available. Today, Inbox, and Upcoming use the same column and simple task rows, so switching views does not feel like entering another app. Today separates Overdue and Done today only when they have tasks; Upcoming groups tasks under day headings.
+Keep the composer at the bottom of the main column on every view, so talking or typing is always one action away. It is a single rounded field with one primary button: a microphone while the field is empty, and Send once there is text. The empty Feed shows one short invitation to capture a thought, with the composer already available. Tasks uses the same column and simple task rows, so switching views does not feel like entering another app. It groups tasks under **Pinned**, **No date** (newest first), **Scheduled** (soonest first), and **Done today**, showing a heading only for groups that have tasks. Each task row ends with a pin toggle that appears on hover or focus, stays visible once pinned, and is always visible on touch screens.
+
+The Feed header has a select button. While selecting, every message gets a round checkbox on its left, tapping anywhere on a message toggles it, and the message's own suggestions and tasks fade back and stop responding. A selection bar replaces the composer with the count, **Select all**, **Delete**, and × to stop; on the narrowest phones Delete shows as its icon alone. Only messages on screen count, so a search narrows what **Select all** and **Delete** touch. The unsent draft in the composer is kept.
 
 AI suggestions sit under their message in one quiet tinted block labeled **Suggested**. Each suggestion is a compact row: title and time on the left; **Create task**, Edit, and a dismiss icon on the right. Tasks that were created from a message appear under it as checkbox rows. Message actions (make a task, delete) live behind a ⋯ button that appears on hover or focus and is always visible on touch screens.
 
-On narrow windows, the rail is replaced by tabs above the content, and the view title shares a row with a sync dot and search. Dialogs become bottom sheets. Keep the composer and all task actions reachable without horizontal scrolling, and respect the safe areas of phones with notches and home indicators.
+On narrow windows, the rail is replaced by tabs above the content, and the view title shares a row with a settings button (carrying the sync dot as a badge), select, and search. Dialogs become bottom sheets. Keep the composer and all task actions reachable without horizontal scrolling, and respect the safe areas of phones with notches and home indicators.
 
 ## Visual language
 
@@ -30,15 +32,15 @@ On narrow windows, the rail is replaced by tabs above the content, and the view 
 | Lines and shape | Fine neutral dividers; small 8–12 px radii on controls. Avoid heavy shadows and oversized pills. |
 | Motion | Brief transitions only when they clarify a state change. Respect reduced-motion settings. |
 
-The default composition is light. A dark appearance follows the system setting; all colors are semantic tokens in `src/styles.css`, defined once for each appearance. Icons should clarify an action and always have an accessible name; text labels are preferable for the main navigation.
+The default composition is light. The appearance follows the system setting unless Settings fixes Light or Dark on that device. All colors are semantic tokens in `src/styles.css`, each written once as a `light-dark()` pair; a fixed choice sets `data-theme` on the root element and points the browser's theme color at the same scheme. Icons should clarify an action and always have an accessible name; text labels are preferable for the main navigation.
 
 ## Interaction states
 
 - **Capture:** Text is saved locally before any optional network or AI work. Sending is one action; the text appears immediately in the Feed. Enter sends and Shift+Enter adds a line when this does not interfere with input method composition.
 - **Task:** A manually created task or an AI suggestion stays linked to its source capture. A suggestion is visibly labeled **Suggested** and can be edited, accepted, or dismissed. A capture may have no task or several tasks.
-- **Dates:** A due date and a reminder time are separate fields. Ambiguous date phrases stay unset for review. Today shows overdue, due-today, and pinned tasks; Inbox holds tasks needing review or a date; Upcoming shows scheduled work.
+- **Dates:** A due date and a reminder time are separate fields. Ambiguous date phrases stay unset for review. Tasks puts undated work above scheduled work; overdue work is marked in words as well as color.
 - **Voice:** Press and hold the microphone to talk; the words appear live in the composer, and releasing sends them as a message. A quick tap listens hands-free until the stop button is tapped; × cancels. No recording is stored or downloadable. States are shown in plain language: listening, transcribing (fallback browsers only), not synced yet, finding tasks, and try again.
-- **Offline and errors:** A local save still succeeds when sync or AI is unavailable. Show a subtle pending or retry state near the affected item, and the overall sync state as a dot with a word in the rail (a dot alone on phones, with an accessible name). Never replace a capture with a spinner or an error page.
+- **Offline and errors:** A local save still succeeds when sync or AI is unavailable. Show a subtle pending or retry state near the affected item, and the overall sync state as a dot with a word in the rail (a dot on the settings button on phones, with an accessible name). Never replace a capture with a spinner or an error page.
 - **Completion:** Completing, reopening, editing, or snoozing a task changes its row immediately. Archiving or deleting a task never erases the source capture.
 
 ## Mac usability

@@ -1,22 +1,22 @@
 import { Check } from 'lucide-react'
 import type { SyncStatus as Status } from '../../../shared/types/sync'
-import type { TaskView, View } from '../../../shared/types/task'
+import type { View } from '../../../shared/types/task'
 import SyncStatus from '../SyncStatus'
 import ViewNavigation from '../ViewNavigation'
 
-/** Desktop side rail: brand, views, and sync state. Hidden on narrow screens. */
+/** Desktop side rail: brand, views, and the sync state that opens settings. Hidden on narrow screens. */
 export default function NavigationRail({
   view,
-  counts,
+  taskCount,
   status,
   onSelect,
-  onOpenAccount,
+  onOpenSettings,
 }: {
   view: View
-  counts: Record<TaskView, number>
+  taskCount: number
   status: Status
   onSelect: (view: View) => void
-  onOpenAccount: () => void
+  onOpenSettings: () => void
 }) {
   return (
     <aside className="rail">
@@ -26,9 +26,9 @@ export default function NavigationRail({
         </span>
         Task Set
       </div>
-      <ViewNavigation view={view} counts={counts} variant="rail" onSelect={onSelect} />
+      <ViewNavigation view={view} taskCount={taskCount} variant="rail" onSelect={onSelect} />
       <div className="rail-footer">
-        <SyncStatus status={status} onOpen={onOpenAccount} />
+        <SyncStatus status={status} onOpen={onOpenSettings} />
       </div>
     </aside>
   )

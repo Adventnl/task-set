@@ -61,16 +61,21 @@ export function useTaskSet() {
   const sendCapture = (text: string, kind: Capture['kind']) =>
     commit(`send:${text}`, () => workspace.createCapture(text, kind), 'Saved', 'Could not save that on this device. Your words are still in the box; try again.')
 
-  const deleteCapture = (capture: Capture) =>
-    commit(
-      capture.id,
-      () => workspace.deleteCapture(capture, data.tasks.filter((task) => task.captureId === capture.id)),
-      'Message deleted',
-      'Could not delete that message. Try again.',
+  const deleteCaptures = (captures: Capture[]) => {
+    const one = captures.length === 1
+    return commit(
+      `delete:${captures.map((capture) => capture.id).join(',')}`,
+      () => workspace.deleteCaptures(captures, data.tasks),
+      one ? 'Message deleted' : `${captures.length} messages deleted`,
+      `Could not delete ${one ? 'that message' : 'those messages'}. Try again.`,
     )
+  }
 
   const toggleTask = (task: Task) =>
     commit(task.id, () => workspace.setTaskCompleted(task, !task.completedAt), task.completedAt ? 'Task reopened' : 'Task done', 'Could not update that task. Try again.')
+
+  const togglePin = (task: Task) =>
+    commit(task.id, () => workspace.setTaskPinned(task, !task.pinned), task.pinned ? 'Task unpinned' : 'Task pinned', 'Could not update that task. Try again.')
 
   const reviewSuggestion = (task: Task, action: 'accept' | 'dismiss') =>
     commit(task.id, () => workspace.reviewSuggestion(task, action), action === 'accept' ? 'Task created' : 'Suggestion dismissed', 'Could not update that suggestion. Try again.')
@@ -102,8 +107,9 @@ export function useTaskSet() {
     announcement,
     sync,
     sendCapture,
-    deleteCapture,
+    deleteCaptures,
     toggleTask,
+    togglePin,
     reviewSuggestion,
     saveTask,
     deleteTask,

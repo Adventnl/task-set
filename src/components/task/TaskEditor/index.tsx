@@ -89,9 +89,9 @@ export default function TaskEditor({
         </div>
         <label className="check-field">
           <input type="checkbox" checked={pinned} onChange={(event) => setPinned(event.target.checked)} />
-          Keep on Today
+          Pin to the top of Tasks
         </label>
-        <p className="modal-note">Reminder times organize Today and Upcoming. Notifications are not sent yet.</p>
+        <p className="modal-note">Tasks with a date are listed by due date, or by reminder if there is none. Notifications are not sent yet.</p>
         {error && (
           <p className="form-error" role="alert">
             {error}

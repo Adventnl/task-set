@@ -1,7 +1,8 @@
 // First deployment of Task Set. A new Worker must receive its required secrets with the deploy,
-// so this asks for the passcode (without echoing it), generates the session secret, and passes
-// both through a private temporary file that is deleted afterwards. Extra arguments go to
-// `wrangler deploy` (for example --dry-run). Later deploys use `npm run deploy`.
+// so this asks for the passcode and the OpenRouter API key (without echoing them), generates the
+// session secret, and passes all three through a private temporary file that is deleted
+// afterwards. Extra arguments go to `wrangler deploy` (for example --dry-run). Later deploys use
+// `npm run deploy`.
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -40,12 +41,17 @@ if ((await askHidden('Type it again: ')) !== passcode) {
   console.error('The passcodes did not match. Nothing was deployed.')
   process.exit(1)
 }
+const openRouterKey = (await askHidden('OpenRouter API key, used when the Workers AI daily allocation runs out: ')).trim()
+if (!openRouterKey) {
+  console.error('An OpenRouter API key is required. Nothing was deployed.')
+  process.exit(1)
+}
 prompt.close()
 
 const directory = mkdtempSync(join(tmpdir(), 'task-set-'))
 const secretsFile = join(directory, 'secrets.json')
 try {
-  const secrets = { APP_PASSCODE: passcode, SESSION_SECRET: randomBytes(32).toString('hex') }
+  const secrets = { APP_PASSCODE: passcode, SESSION_SECRET: randomBytes(32).toString('hex'), OPENROUTER_API_KEY: openRouterKey }
   writeFileSync(secretsFile, JSON.stringify(secrets), { mode: 0o600 })
   execFileSync('npx', ['wrangler', 'deploy', '--secrets-file', secretsFile, ...process.argv.slice(2)], { stdio: 'inherit' })
 } finally {

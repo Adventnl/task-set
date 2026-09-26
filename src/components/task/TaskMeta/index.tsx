@@ -1,10 +1,10 @@
-import { Bell, CalendarClock, Pin } from 'lucide-react'
+import { Bell, CalendarClock } from 'lucide-react'
 import type { Task } from '../../../shared/types/task'
 import { isOverdue, whenLabel } from '../../../shared/utils/taskView'
 
-/** Due date, reminder, and pin, each with an icon and words so none relies on color. */
+/** Due date and reminder, each with an icon and words so neither relies on color. */
 export default function TaskMeta({ task }: { task: Task }) {
-  if (!task.dueAt && !task.reminderAt && !task.pinned) return null
+  if (!task.dueAt && !task.reminderAt) return null
   const overdue = isOverdue(task)
   return (
     <span className="task-meta">
@@ -19,12 +19,6 @@ export default function TaskMeta({ task }: { task: Task }) {
         <span>
           <Bell size={13} aria-hidden="true" />
           {whenLabel(task.reminderAt)}
-        </span>
-      )}
-      {task.pinned && (
-        <span>
-          <Pin size={13} aria-hidden="true" />
-          On Today
         </span>
       )}
     </span>

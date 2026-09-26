@@ -1,5 +1,5 @@
 import { ArrowUp, X } from 'lucide-react'
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
 import type { useDictation } from '../../../shared/hooks/useDictation'
 import TalkButton from '../TalkButton'
 
@@ -20,19 +20,29 @@ function talkHint(phase: Phase, handsFree: boolean): string {
   return handsFree ? 'Tap the square to send, or × to cancel.' : 'Release to send.'
 }
 
-/** Type or talk. Enter sends; the microphone sends what it hears when you let go. */
+/**
+ * Type or talk. Enter sends; the microphone sends what it hears when you let go.
+ * While `hidden`, it keeps the unsent draft and never leaves the microphone listening.
+ */
 export default function Composer({
   inputRef,
   dictation,
+  hidden = false,
   onSend,
 }: {
   inputRef: RefObject<HTMLTextAreaElement | null>
   dictation: ReturnType<typeof useDictation>
+  hidden?: boolean
   onSend: (text: string) => Promise<boolean>
 }) {
   const [draft, setDraft] = useState('')
   const [handsFree, setHandsFree] = useState(false)
   const talking = dictation.phase !== 'idle'
+  const { cancel } = dictation
+
+  useEffect(() => {
+    if (hidden) cancel()
+  }, [hidden, cancel])
 
   useLayoutEffect(() => {
     const input = inputRef.current
@@ -49,7 +59,7 @@ export default function Composer({
   }
 
   return (
-    <div className="composer-dock">
+    <div className="composer-dock" hidden={hidden}>
       {dictation.error && (
         <p className="composer-error" role="alert">
           {dictation.error}

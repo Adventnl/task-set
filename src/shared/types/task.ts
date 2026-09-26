@@ -27,8 +27,7 @@ export interface Task {
   suggestionStatus: 'suggested' | 'dismissed' | null
 }
 
-export type View = 'feed' | 'today' | 'inbox' | 'upcoming'
-export type TaskView = Exclude<View, 'feed'>
+export type View = 'feed' | 'tasks'
 export type Editor = { captureId: string; task?: Task }
 export type TaskInput = {
   title: string
