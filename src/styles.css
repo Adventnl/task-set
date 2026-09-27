@@ -2074,7 +2074,7 @@ textarea.text-field {
   }
 }
 
-/* Four view names fill a phone's segmented control; each view's title line carries its count. */
+/* View names fill a phone's segmented control; each view's title line carries its count. */
 @media (max-width: 430px) {
   .view-nav-tabs .view-nav-count {
     display: none;
@@ -2120,4 +2120,31 @@ textarea.text-field {
   .talk-button.is-active {
     transform: none;
   }
+}
+
+/* GitHub uses the same reading column, quiet rows, and semantic controls. */
+.github-screen a.button { color: var(--accent); text-decoration: none; }
+.github-screen .button { min-height: var(--touch); }
+.github-connect { padding-top: var(--space-5); }
+.github-connect form { margin-top: var(--space-5); }
+.github-connect input { width: 100%; margin-top: var(--space-2); }
+.github-toolbar, .github-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.github-toolbar { flex-wrap: wrap; padding: var(--space-3) 0; }
+.github-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.github-connect .github-actions { margin-top: var(--space-4); }
+.github-picker { border-block: 1px solid var(--line); padding-block: var(--space-3); }
+.github-picker summary, .github-warnings summary { cursor: pointer; min-height: var(--touch); display: list-item; align-content: center; }
+.github-repositories { border: 0; padding: 0; margin: var(--space-2) 0 0; max-height: calc(var(--space-8) * 4); overflow-y: auto; }
+.github-repository { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch); }
+.github-repository span, .github-row-content { min-width: 0; overflow-wrap: anywhere; }
+.github-section-title { font-size: var(--text-lg); margin-top: var(--space-6); }
+.github-row { padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
+.github-row h3 { font-size: var(--text-body); font-weight: 600; }
+.github-row h3 a { color: var(--text); }
+.github-row > .button, .github-row > .github-actions { flex-shrink: 0; }
+.github-status { font-size: var(--text-sm); color: var(--text-secondary); margin-top: var(--space-2); }
+.github-warnings { margin-top: var(--space-4); color: var(--danger); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .github-row { align-items: flex-start; flex-direction: column; gap: var(--space-3); }
+  .view-nav-tabs { grid-auto-flow: initial; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

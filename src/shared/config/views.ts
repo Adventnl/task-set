@@ -3,7 +3,7 @@ import type { View } from '../types/task'
 /** The sidebar and phone navigation. The Archive is a tab of Tasks, so it is not a section of its own. */
 export type Section = Exclude<View, 'archive'>
 
-export const SECTIONS: readonly Section[] = ['feed', 'tasks', 'calendar', 'meetings']
+export const SECTIONS: readonly Section[] = ['feed', 'tasks', 'calendar', 'meetings', 'github']
 
 export const VIEW_LABELS: Record<View, string> = {
   feed: 'Notes',
@@ -11,6 +11,7 @@ export const VIEW_LABELS: Record<View, string> = {
   archive: 'Archive',
   calendar: 'Calendar',
   meetings: 'Meetings',
+  github: 'GitHub',
 }
 
 /** The tabs of the Tasks section. */

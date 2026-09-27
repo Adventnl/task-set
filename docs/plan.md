@@ -103,3 +103,7 @@ The target is no additional monthly service charge for normal personal use, subj
 ## Product decision to test
 
 Parsed tasks appear as visible drafts that can be corrected or dismissed. Keep the capture path fast and let daily use of the first working prototype guide any change to confirmation behavior.
+
+## GitHub connector
+
+Decision of 27 September 2026: add a GitHub view for monitoring open PRs and branches ahead across selected repositories, with Select all. PR rows show drafts, merge blockers, and checks; branches compare with their default branch and show ahead/behind counts. Repository access comes from a personal access token, held only in memory in the browser and never synced or persisted. Repository choices are remembered per GitHub account on this device. Activity refreshes every minute while the view is open, and failures are shown as incomplete results. The Merge on GitHub action opens the PR at its merge section so the user reviews and confirms on GitHub. Direct merging inside Task Set and OAuth are not implemented.

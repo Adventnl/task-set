@@ -124,6 +124,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     tasks: taskCount,
     calendar: calendar.upcoming.length,
     meetings: data.meetings.length,
+    github: 0,
   }
   const shownMeeting = view === 'meetings' ? meetings.meeting : null
 

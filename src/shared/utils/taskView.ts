@@ -139,6 +139,8 @@ export interface ViewCounts {
 /** The line under a view's title. */
 export function viewDetail(view: View, counts: ViewCounts): string {
   switch (view) {
+    case 'github':
+      return 'Pull requests and branches across your repositories'
     case 'archive':
       return `Completed tasks stay here for ${ARCHIVE_DAYS} days`
     case 'tasks':

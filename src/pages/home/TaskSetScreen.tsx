@@ -19,6 +19,7 @@ import TaskEditor from '../../components/task/TaskEditor'
 import TaskList from '../../components/task/TaskList'
 import { useAppearance } from '../../shared/hooks/useAppearance'
 import { useDictation } from '../../shared/hooks/useDictation'
+import { useGitHub } from '../../shared/hooks/useGitHub'
 import { useInstallPrompt } from '../../shared/hooks/useInstallPrompt'
 import { useSchedule } from '../../shared/hooks/useSchedule'
 import { useTaskSet } from '../../shared/hooks/useTaskSet'
@@ -27,6 +28,7 @@ import type { Capture, Task } from '../../shared/types/task'
 import { COMING_UP_COUNT } from '../../shared/utils/calendarView'
 import CalendarScreen from './CalendarScreen'
 import MeetingsScreen from './MeetingsScreen'
+import GitHubScreen from './GitHubScreen'
 
 const TASKS_PANEL = 'tasks-panel'
 
@@ -36,6 +38,7 @@ export default function TaskSetScreen() {
   const data = useTaskSet()
   const schedule = useSchedule(data)
   const ui = useWorkspaceView(data.workspace)
+  const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
@@ -92,6 +95,8 @@ export default function TaskSetScreen() {
 
   function content() {
     switch (ui.view) {
+      case 'github':
+        return <GitHubScreen github={github} />
       case 'feed':
         return (
           <CaptureFeed
@@ -146,7 +151,7 @@ export default function TaskSetScreen() {
     <div className="app">
       <NavigationRail
         section={ui.section}
-        counts={ui.counts}
+        counts={{ ...ui.counts, github: github.activity?.pulls.length ?? 0 }}
         status={data.sync.status}
         onSelect={ui.selectView}
         onOpenSettings={openSettings}
@@ -169,7 +174,7 @@ export default function TaskSetScreen() {
           onToggleSelecting={ui.toggleSelecting}
           onOpenSettings={openSettings}
         />
-        <ViewNavigation section={ui.section} counts={ui.counts} variant="tabs" onSelect={ui.selectView} />
+        <ViewNavigation section={ui.section} counts={{ ...ui.counts, github: github.activity?.pulls.length ?? 0 }} variant="tabs" onSelect={ui.selectView} />
         {ui.section === 'tasks' && (
           <Tabs label="Tasks" tabs={ui.taskTabs} selected={ui.view === 'archive' ? 'archive' : 'tasks'} panelId={TASKS_PANEL} onSelect={ui.selectView} />
         )}
@@ -204,7 +209,7 @@ export default function TaskSetScreen() {
             dictation={dictation}
             placeholder={ui.composer.placeholder}
             label={ui.composer.label}
-            hidden={ui.selecting}
+            hidden={ui.selecting || ui.view === 'github'}
             onSend={(text) => send(text, 'text')}
           />
         </div>
