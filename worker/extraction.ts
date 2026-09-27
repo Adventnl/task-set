@@ -46,14 +46,15 @@ const SCHEMA = {
 
 /**
  * The OpenRouter fallback is off unless this optional secret is set (`wrangler secret put
- * OPENROUTER_API_KEY`), so it is not part of the generated `Env` type.
+ * OPENROUTER_API_KEY`), so it is not part of the generated `Env` type. The Workers AI binding is
+ * absent in preview deployments, which use OpenRouter alone.
  */
-type ExtractionEnv = Pick<Env, 'AI'> & { OPENROUTER_API_KEY?: string }
+type ExtractionEnv = { AI?: Env['AI']; OPENROUTER_API_KEY?: string }
 
 /**
  * Asks Workers AI for task suggestions in a capture. When that call fails, for example after the
- * daily free allocation is used up, OpenRouter answers instead if its key is set. Throws when no
- * model answers or the output is invalid.
+ * daily free allocation is used up, or when there is no AI binding, OpenRouter answers instead if
+ * its key is set. Throws when no model answers or the output is invalid.
  */
 export async function extractSuggestions(env: ExtractionEnv, capture: Capture): Promise<Suggestion[]> {
   const messages: ChatMessage[] = [
@@ -67,20 +68,27 @@ export async function extractSuggestions(env: ExtractionEnv, capture: Capture): 
       }),
     },
   ]
+  const fallback = (reason: string) => {
+    if (!env.OPENROUTER_API_KEY) throw new Error(reason)
+    console.warn(JSON.stringify({ event: 'workers_ai_unavailable', fallback: 'openrouter', message: reason }))
+    return openRouterStructuredChat(env.OPENROUTER_API_KEY, { model: FALLBACK_MODEL, messages, schema: SCHEMA, maxTokens: MAX_TOKENS })
+  }
   let answer: unknown
-  try {
-    const result = await env.AI.run(MODEL, {
-      messages,
-      response_format: { type: 'json_schema', json_schema: SCHEMA },
-      max_tokens: MAX_TOKENS,
-      temperature: 0,
-    })
-    answer = result.response
-  } catch (error) {
-    if (!env.OPENROUTER_API_KEY) throw error
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn(JSON.stringify({ event: 'workers_ai_failed', fallback: 'openrouter', message }))
-    answer = await openRouterStructuredChat(env.OPENROUTER_API_KEY, { model: FALLBACK_MODEL, messages, schema: SCHEMA, maxTokens: MAX_TOKENS })
+  if (!env.AI) {
+    answer = await fallback('No AI is set up: there is no Workers AI binding and OPENROUTER_API_KEY is not set.')
+  } else {
+    try {
+      const result = await env.AI.run(MODEL, {
+        messages,
+        response_format: { type: 'json_schema', json_schema: SCHEMA },
+        max_tokens: MAX_TOKENS,
+        temperature: 0,
+      })
+      answer = result.response
+    } catch (error) {
+      if (!env.OPENROUTER_API_KEY) throw error
+      answer = await fallback(error instanceof Error ? error.message : String(error))
+    }
   }
   return parseSuggestions(answer, capture.text, capture.timeZone, capture.createdAt)
 }

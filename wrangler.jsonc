@@ -27,5 +27,17 @@
   ],
   // OPENROUTER_API_KEY is optional: when set, OpenRouter answers task suggestions if Workers AI fails.
   "secrets": { "required": ["APP_PASSCODE", "SESSION_SECRET"] },
+  // Preview deployments of branches (Workers Builds). Each preview gets its own empty workspace (an
+  // isolated Durable Object namespace) and its own rate limits, so it never touches real data. There
+  // is no Workers AI binding: task suggestions use OpenRouter when the preview's OPENROUTER_API_KEY
+  // secret is set, and voice transcription is unavailable. Preview secrets are separate from
+  // production: `npx wrangler preview secret put APP_PASSCODE` (and SESSION_SECRET, OPENROUTER_API_KEY).
+  "previews": {
+    "durable_objects": { "bindings": [{ "name": "TASK_SPACE", "class_name": "TaskSpace" }] },
+    "ratelimits": [
+      { "name": "AI_RATE_LIMIT", "namespace_id": "1947023", "simple": { "limit": 6, "period": 60 } },
+      { "name": "AUTH_RATE_LIMIT", "namespace_id": "1947024", "simple": { "limit": 5, "period": 60 } }
+    ]
+  },
   "observability": { "enabled": true }
 }

@@ -39,6 +39,8 @@ npm run deploy:first        # asks for a passcode, generates the session secret,
 
 Later deploys: `npm run deploy`. It runs the full validation first.
 
+**Previews.** Cloudflare Workers Builds deploys each pull request branch as a Preview, using the `previews` block in [`wrangler.jsonc`](wrangler.jsonc). A Preview has its own empty workspace and rate limits, so it never sees your real notes, and it has no Workers AI: task suggestions use OpenRouter, and voice transcription in browsers without live speech recognition is unavailable. Previews have their own secrets. Set them once to sign in to a Preview and get suggestions: `npx wrangler preview secret put APP_PASSCODE`, then `SESSION_SECRET` (for example `openssl rand -hex 32`) and `OPENROUTER_API_KEY` the same way. Without an OpenRouter key, notes in a Preview still save and show *Try again*.
+
 To change the passcode, run `npx wrangler secret put APP_PASSCODE`; every device is signed out and signs in with the new one. The passcode must be at least 12 characters, so use a phrase. Sign-in attempts are limited to five per minute per network address. To turn the OpenRouter fallback on, run `npx wrangler secret put OPENROUTER_API_KEY`; to turn it off again, run `npx wrangler secret delete OPENROUTER_API_KEY`. Setting a credit limit on the key in OpenRouter caps what the fallback can spend.
 
 ## Security model

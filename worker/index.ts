@@ -40,6 +40,8 @@ async function push(request: Request, space: DurableObjectStub<TaskSpace>): Prom
 }
 
 async function transcribe(request: Request, env: Env): Promise<Response> {
+  // Preview deployments have no Workers AI binding, and transcription has no fallback.
+  if (!env.AI) return json({ error: 'Voice needs Workers AI, which this deployment does not have. You can still type.' }, 503)
   const mimeType = (request.headers.get('content-type') ?? '').split(';')[0].toLowerCase()
   if (!allowedAudio.has(mimeType)) return json({ error: 'Unsupported audio format' }, 415)
   const bytes = await readBody(request, MAX_AUDIO_BYTES)
