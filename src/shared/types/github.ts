@@ -34,3 +34,9 @@ export interface GitHubActivity {
   warnings: string[]
   updatedAt: string
 }
+
+export interface GitHubBinding {
+  login: string
+  token: string
+  repositories: GitHubRepository[]
+}

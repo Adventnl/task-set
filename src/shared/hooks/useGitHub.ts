@@ -1,58 +1,64 @@
 import { useEffect, useRef, useState } from 'react'
-import { connectGitHub, loadGitHubActivity, readGitHubSelection, saveGitHubSelection } from '../../services/githubService'
-import type { GitHubActivity, GitHubRepository } from '../types/github'
+import { assertGitHubAccount, bindGitHub, connectGitHub, isGitHubAuthenticationError, loadGitHubActivity, readGitHubBinding, readGitHubSelection, saveGitHubSelection } from '../../services/githubService'
+import type { GitHubActivity, GitHubBinding } from '../types/github'
 
 const REFRESH_MS = 60_000
 
 export function useGitHub(active: boolean, signedIn: boolean) {
-  const token = useRef('')
-  const refreshing = useRef<AbortController | null>(null)
   const connecting = useRef<AbortController | null>(null)
-  const [login, setLogin] = useState('')
-  const [repositories, setRepositories] = useState<GitHubRepository[]>([])
+  const [binding, setBinding] = useState<GitHubBinding | null>(null)
   const [selected, setSelected] = useState<number[]>([])
   const [activity, setActivity] = useState<GitHubActivity | null>(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [needsToken, setNeedsToken] = useState(false)
   const [error, setError] = useState('')
   const [storageError, setStorageError] = useState('')
   const [revision, setRevision] = useState(0)
-
-  function disconnect() {
-    connecting.current?.abort()
-    refreshing.current?.abort()
-    token.current = ''
-    setLogin('')
-    setRepositories([])
-    setSelected([])
-    setActivity(null)
-    setError('')
-    setStorageError('')
-    setBusy(false)
-    setLoading(false)
-  }
+  const [repositories, setRepositories] = useState<GitHubBinding['repositories']>([])
 
   useEffect(() => {
-    if (!signedIn) disconnect()
-    return () => { connecting.current?.abort(); token.current = '' }
+    if (signedIn) {
+      try {
+        const saved = readGitHubBinding()
+        setBinding(saved)
+        setRepositories(saved?.repositories ?? [])
+        setSelected(saved ? readGitHubSelection(saved.login) ?? saved.repositories.map((repo) => repo.id) : [])
+        setError('')
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Could not restore the GitHub binding.')
+      }
+    } else {
+      setBinding(null)
+      setRepositories([])
+      setSelected([])
+      setActivity(null)
+      setNeedsToken(false)
+      setError('')
+      setStorageError('')
+      setBusy(false)
+      setLoading(false)
+    }
+    return () => { connecting.current?.abort() }
   }, [signedIn])
 
   async function connect(value: string) {
+    if (!signedIn) return
     connecting.current?.abort()
     const controller = new AbortController()
     connecting.current = controller
     setBusy(true)
     setError('')
     try {
-      const connection = await connectGitHub(value.trim(), controller.signal)
+      const connection = await bindGitHub(value, controller.signal)
       if (controller.signal.aborted) return
-      token.current = value.trim()
       setRepositories(connection.repositories)
       const saved = readGitHubSelection(connection.login)
       setSelected(saved === null ? connection.repositories.map((repo) => repo.id) : saved.filter((id) => connection.repositories.some((repo) => repo.id === id)))
-      setLogin(connection.login)
+      setNeedsToken(false)
+      setBinding(connection)
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not connect to GitHub.')
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not bind GitHub on this device.')
     } finally {
       if (!controller.signal.aborted) setBusy(false)
     }
@@ -63,7 +69,7 @@ export function useGitHub(active: boolean, signedIn: boolean) {
     setActivity(null)
     setError('')
     try {
-      saveGitHubSelection(login, ids)
+      if (binding) saveGitHubSelection(binding.login, ids)
       setStorageError('')
     } catch {
       setStorageError('Repository choices could not be saved. They will last until you reload.')
@@ -71,18 +77,25 @@ export function useGitHub(active: boolean, signedIn: boolean) {
   }
 
   useEffect(() => {
-    if (!active || !signedIn || !login || !selected.length) { setLoading(false); return }
+    if (!active || !signedIn || !binding || needsToken) { setLoading(false); return }
+    const bound = binding
     const controller = new AbortController()
-    refreshing.current = controller
     let timer: ReturnType<typeof setTimeout>
     async function refresh() {
       setLoading(true)
       setError('')
       try {
-        const result = await loadGitHubActivity(repositories.filter((repo) => selected.includes(repo.id)), token.current, controller.signal)
+        const connection = await connectGitHub(bound.token, controller.signal)
+        assertGitHubAccount(connection.login, bound.login)
+        if (controller.signal.aborted) return
+        setRepositories(connection.repositories)
+        const result = await loadGitHubActivity(connection.repositories.filter((repo) => selected.includes(repo.id)), bound.token, controller.signal)
         if (!controller.signal.aborted) setActivity(result)
       } catch (cause) {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not refresh GitHub activity.')
+        if (!controller.signal.aborted) {
+          setError(cause instanceof Error ? cause.message : 'Could not refresh GitHub activity.')
+          if (isGitHubAuthenticationError(cause)) setNeedsToken(true)
+        }
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
@@ -91,12 +104,21 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       }
     }
     void refresh()
-    return () => { controller.abort(); clearTimeout(timer) }
-  }, [active, signedIn, login, repositories, selected, revision])
+    const onVisible = () => { if (document.visibilityState === 'visible') setRevision((value) => value + 1) }
+    const onOnline = () => setRevision((value) => value + 1)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [active, signedIn, binding, selected, needsToken, revision])
 
   return {
-    login, repositories, selected, activity, busy, loading, error, storageError,
-    connect, disconnect, choose,
+    login: binding?.login ?? '', repositories, selected, activity, busy, loading, needsToken, error, storageError,
+    connect, choose,
     refresh: () => setRevision((value) => value + 1),
   }
 }

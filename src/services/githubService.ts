@@ -1,5 +1,5 @@
-import { githubList, githubRequest } from '../connectors/githubConnector'
-import type { GitHubActivity, GitHubBranch, GitHubPullRequest, GitHubRepository } from '../shared/types/github'
+import { GitHubAuthenticationError, githubList, githubRequest, readGitHubBindingData, saveGitHubBindingData } from '../connectors/githubConnector'
+import type { GitHubActivity, GitHubBinding, GitHubBranch, GitHubPullRequest, GitHubRepository } from '../shared/types/github'
 import { checkSummary, githubNumber, githubObject, githubText, parsePull, parseRepository, repositoryPath } from '../shared/utils/github'
 
 /** Limit fan-out for PR details and branch comparisons to four concurrent operations. */
@@ -26,6 +26,7 @@ export async function connectGitHub(token: string, signal: AbortSignal): Promise
 
 function failure(error: unknown, signal: AbortSignal): string {
   signal.throwIfAborted()
+  if (error instanceof GitHubAuthenticationError) throw error
   return error instanceof Error ? error.message : 'Could not load GitHub activity.'
 }
 
@@ -87,7 +88,7 @@ export async function loadGitHubActivity(repositories: GitHubRepository[], token
   return { pulls, branches, warnings, updatedAt: new Date().toISOString() }
 }
 
-/** Only repository choices are remembered on this device; credentials and activity are not. */
+/** Repository choices are kept separately from the account binding for compatibility. */
 export function readGitHubSelection(login: string): number[] | null {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(`task-set:github:${login}`) ?? 'null')
@@ -99,4 +100,37 @@ export function readGitHubSelection(login: string): number[] | null {
 
 export function saveGitHubSelection(login: string, ids: number[]): void {
   localStorage.setItem(`task-set:github:${login}`, JSON.stringify(ids))
+}
+
+/** Invalid or inaccessible storage is reported rather than silently losing the binding. */
+export function readGitHubBinding(): GitHubBinding | null {
+  const value = readGitHubBindingData()
+  if (value === null) return null
+  const binding = githubObject(value)
+  const login = githubText(binding.login)
+  const token = githubText(binding.token)
+  if (!/^[a-z\d](?:[a-z\d-]*[a-z\d])?$/i.test(login) || !Array.isArray(binding.repositories)) throw new Error('The saved GitHub binding is unreadable.')
+  const repositories = binding.repositories.map((value) => {
+    const repo = githubObject(value)
+    return parseRepository({ id: repo.id, full_name: repo.name, default_branch: repo.defaultBranch })
+  })
+  return { login, token, repositories }
+}
+
+export function assertGitHubAccount(login: string, boundLogin: string): void {
+  if (login.toLowerCase() !== boundLogin.toLowerCase()) throw new Error(`GitHub is bound to ${boundLogin}. Use a token for that account.`)
+}
+
+export async function bindGitHub(token: string, signal: AbortSignal): Promise<GitHubBinding> {
+  const connection = await connectGitHub(token.trim(), signal)
+  signal.throwIfAborted()
+  const saved = readGitHubBinding()
+  if (saved) assertGitHubAccount(connection.login, saved.login)
+  const binding = { ...connection, token: token.trim() }
+  saveGitHubBindingData(binding)
+  return binding
+}
+
+export function isGitHubAuthenticationError(error: unknown): boolean {
+  return error instanceof GitHubAuthenticationError
 }

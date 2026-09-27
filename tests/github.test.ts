@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { githubList, githubRequest } from '../src/connectors/githubConnector'
-import { connectGitHub, loadGitHubActivity } from '../src/services/githubService'
+import { bindGitHub, connectGitHub, isGitHubAuthenticationError, loadGitHubActivity, readGitHubBinding, readGitHubSelection, saveGitHubSelection } from '../src/services/githubService'
 import { checkSummary, mergeStatus, parsePull, parseRepository } from '../src/shared/utils/github'
 
 const repo = { id: 1, full_name: 'owner/repo', default_branch: 'main' }
@@ -112,5 +112,80 @@ describe('GitHub monitoring', () => {
     const controller = new AbortController()
     controller.abort()
     await expect(loadGitHubActivity([parseRepository(repo)], 't', controller.signal)).rejects.toThrow()
+  })
+})
+
+
+describe('permanent GitHub binding', () => {
+  function storage() {
+    const values = new Map<string, string>()
+    const store = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value) } }
+    vi.stubGlobal('localStorage', store)
+    return store
+  }
+
+  it('saves a verified account and restores its token, repositories and choices after reload', async () => {
+    storage()
+    mockApi((url) => url.pathname === '/user' ? { login: 'owner' } : [repo])
+    expect(readGitHubBinding()).toBeNull()
+    await bindGitHub('  first-token  ', signal())
+    saveGitHubSelection('owner', [])
+    expect(readGitHubBinding()).toEqual({ login: 'owner', token: 'first-token', repositories: [parseRepository(repo)] })
+    expect(readGitHubSelection('owner')).toEqual([])
+  })
+
+  it('allows renewing the same account but rejects a different account without overwriting the binding', async () => {
+    storage()
+    mockApi((url) => url.pathname === '/user' ? { login: 'owner' } : [repo])
+    await bindGitHub('first', signal())
+    await bindGitHub('renewed', signal())
+    mockApi((url) => url.pathname === '/user' ? { login: 'different' } : [repo])
+    await expect(bindGitHub('other', signal())).rejects.toThrow('bound to owner')
+    expect(readGitHubBinding()?.token).toBe('renewed')
+    expect(readGitHubBinding()?.login).toBe('owner')
+  })
+
+  it('keeps the first completed binding when two account connections race', async () => {
+    storage()
+    let finishFirst!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init: RequestInit) => {
+      if (new URL(input).pathname !== '/user') return Response.json([repo])
+      const authorization = new Headers(init.headers).get('Authorization')
+      if (authorization === 'Bearer slow') return new Promise<Response>((resolve) => { finishFirst = resolve })
+      return Response.json({ login: 'owner' })
+    }))
+    const first = bindGitHub('slow', signal())
+    await bindGitHub('fast', signal())
+    finishFirst(Response.json({ login: 'different' }))
+    await expect(first).rejects.toThrow('bound to owner')
+    expect(readGitHubBinding()?.token).toBe('fast')
+  })
+
+  it('does not save rejected or cancelled connections', async () => {
+    storage()
+    mockApi(() => new Response('', { status: 401 }))
+    await expect(bindGitHub('invalid', signal())).rejects.toThrow('GitHub rejected')
+    expect(readGitHubBinding()).toBeNull()
+    mockApi((url) => url.pathname === '/user' ? { login: 'owner' } : [repo])
+    const controller = new AbortController()
+    controller.abort()
+    await expect(bindGitHub('cancelled', controller.signal)).rejects.toThrow()
+    expect(readGitHubBinding()).toBeNull()
+  })
+
+  it('reports blocked or corrupt storage instead of claiming the account was saved', async () => {
+    const store = storage()
+    mockApi((url) => url.pathname === '/user' ? { login: 'owner' } : [repo])
+    vi.spyOn(store, 'setItem').mockImplementation(() => { throw new Error('Storage blocked') })
+    await expect(bindGitHub('t', signal())).rejects.toThrow('Storage blocked')
+    expect(readGitHubBinding()).toBeNull()
+    vi.stubGlobal('localStorage', { getItem: () => '{broken' })
+    expect(() => readGitHubBinding()).toThrow()
+  })
+
+  it('requires renewal when credentials expire during activity loading', async () => {
+    mockApi((url) => url.pathname.endsWith('/pulls') ? [pull] : new Response('', { status: 401 }))
+    const failure = await loadGitHubActivity([parseRepository(repo)], 'expired', signal()).catch((error: unknown) => error)
+    expect(isGitHubAuthenticationError(failure)).toBe(true)
   })
 })

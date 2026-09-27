@@ -7,13 +7,13 @@ export default function GitHubScreen({ github }: { github: ReturnType<typeof use
   return (
     <div className="github-screen">
       {github.error && <p className="form-error" role="alert">{github.error}</p>}
-      {!github.login ? <GitHubConnection busy={github.busy} onConnect={github.connect} /> : (
+      {!github.login || github.needsToken ? <GitHubConnection busy={github.busy} login={github.login} onConnect={github.connect} /> : (
         <>
           <div className="github-toolbar">
             <p className="modal-text">Connected as <strong>{github.login}</strong></p>
             <div className="github-actions">
-              <button className="button button-secondary" type="button" onClick={github.refresh} disabled={github.loading || !github.selected.length}>Refresh</button>
-              <button className="button button-quiet" type="button" onClick={github.disconnect}>Disconnect</button>
+              <button className="button button-secondary" type="button" onClick={github.refresh} disabled={github.loading}>Refresh</button>
+              <a className="button button-quiet" href={`https://github.com/${encodeURIComponent(github.login)}`} target="_blank" rel="noopener noreferrer">Open GitHub ↗</a>
             </div>
           </div>
           <RepositoryPicker repositories={github.repositories} selected={github.selected} onChoose={github.choose} />
