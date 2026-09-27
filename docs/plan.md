@@ -1,18 +1,18 @@
 # Task Set: product and build plan
 
-Status: revised 27 September 2026. Phases 1–4 are implemented as one installable web app for Mac and phone, with live sync and automatic AI suggestions, plus a Calendar and Meetings (see [Calendar and meetings](#calendar-and-meetings)). `task.hanoryx.com` is the intended host name; deployment has not been completed.
+Status: revised 28 September 2026. Phases 1–4 are implemented as one installable web app for Mac and phone, with live sync and explicitly requested task generation, plus a Calendar and Meetings (see [Calendar and meetings](#calendar-and-meetings)). `task.hanoryx.com` is the intended host name; deployment has not been completed.
 
 ## The problem
 
 The current workaround is a private Discord group chat: send a message now and hope to find it later. A traditional task app adds too much work at the moment of capture. Task Set should feel like sending a message to yourself, while making the actionable parts easy to find and remember.
 
-For example, at 11 pm, someone says, “I need to change the Cloudflare email tomorrow morning.” The capture appears immediately. Later, transcription and extraction can propose a linked task called “Change the Cloudflare email” and a reminder for 9:00 am tomorrow in the user's local time. The original words remain available, and the task and reminder can be corrected independently.
+For example, at 11 pm, someone says, “Generate task: change the Cloudflare email tomorrow morning.” The capture appears immediately. When the note explicitly says “generate task,” extraction creates a linked task called “Change the Cloudflare email” and a reminder for 9:00 am tomorrow in the user's local time. The original words remain available, and the task and reminder can be corrected independently.
 
 ## Product rules
 
 1. **Capture first.** A saved capture is never lost because AI or sync fails. Voice is turned into text as it is spoken and saved as text; audio is never stored (decision of 26 September 2026).
 2. **The feed is the source.** Every capture remains in a chronological, searchable private feed. A capture may produce zero, one, or several tasks.
-3. **AI suggests; the user controls.** The app never silently invents a deadline, deletes a capture, or marks work complete. AI output appears as a visible draft that can be edited or dismissed. A reminder can be proposed when the user's words specify one.
+3. **Task generation is explicit.** Ordinary notes never call AI or generate tasks. The words “generate task” (also “generate a task” or “generate tasks”) opt into extraction; negated commands do not. Generated tasks appear directly in Tasks, and the original note stays unchanged. A note’s adjacent ⋯ menu, long press, or right-click offers Make task and Delete. Existing suggestions can be reviewed in Tasks. Never invent a deadline, delete a capture, or mark work complete.
 4. **Reminder time is distinct from due time.** “Remind me tomorrow morning” sets a reminder, not a due date. “Due Friday” sets a due date.
 5. **Works across devices eventually.** When sync arrives, captures and edits should reach signed-in devices within seconds while online. Local capture continues without a connection.
 6. **One person first.** This is a personal workspace, not a group messenger.
@@ -50,7 +50,7 @@ Add sign-in, private account-scoped storage, a local write queue with stable IDs
 
 ### 4. Voice and AI
 
-Implementation status (26 September 2026): Hold-to-talk uses the browser's live speech recognition, so words appear while speaking and are sent as text on release. Browsers without it record into memory and send the audio once to Whisper with voice-activity filtering; the audio is discarded. Every new capture is queued on the server for automatic extraction by Llama 4 Scout, retried up to three times, and shown as editable **Suggested** drafts. The model receives the local time and a 14-day calendar; its output must quote the capture, and code enforces the reminder/due rule, default times, and a plausible date range. Earlier recording storage, playback, download, and manual transcript editing were removed at the user's request.
+Implementation status (26 September 2026): Hold-to-talk uses the browser's live speech recognition, so words appear while speaking and are sent as text on release. Browsers without it record into memory and send the audio once to Whisper with voice-activity filtering; the audio is discarded. Only captures explicitly requesting task generation are queued on the server for extraction by Llama 4 Scout, retried up to three times, and shown as editable tasks in Tasks. Earlier suggested drafts remain reviewable in Tasks. The model receives the local time and a 14-day calendar; its output must quote the capture, and code enforces the reminder/due rule, default times, and a plausible date range. Earlier recording storage, playback, download, and manual transcript editing were removed at the user's request.
 
 The paragraphs below describe the original plan; where they mention stored recordings, the decision above replaces them.
 
@@ -91,8 +91,8 @@ The target is no additional monthly service charge for normal personal use, subj
 ## Full-product acceptance checks
 
 - A text capture takes one send action; voice takes hold, speak, release. Both save locally before processing.
-- “Change the Cloudflare email tomorrow morning” yields a linked task draft and a 9:00 am local reminder proposal the next day, without inventing a due date.
-- A message containing two actions yields two independently editable suggestions; a non-task message yields none.
+- “Generate task: change the Cloudflare email tomorrow morning” yields a linked task and a 9:00 am local reminder proposal the next day, without inventing a due date.
+- An explicit generate-task message containing two actions yields two independently editable tasks; all other messages stay notes.
 - Transcription or extraction failure offers retry and manual edit without losing the source capture.
 - Completing or snoozing a task updates online devices; reconnect fetches missed changes without duplicate tasks.
 - The designated Android phone delivers an already scheduled reminder while offline.
@@ -102,8 +102,12 @@ The target is no additional monthly service charge for normal personal use, subj
 
 ## Product decision to test
 
-Parsed tasks appear as visible drafts that can be corrected or dismissed. Keep the capture path fast and let daily use of the first working prototype guide any change to confirmation behavior.
+Explicitly requested tasks appear in Tasks and can be edited or deleted. Notes remain plain text. Keep the capture path fast and let daily use of the first working prototype guide any change to confirmation behavior.
 
 ## GitHub connector
 
-Decision of 27 September 2026: add a GitHub view for monitoring open PRs and branches ahead across selected repositories, with Select all. PR rows show drafts, merge blockers, and checks; branches compare with their default branch and show ahead/behind counts. Repository access comes from a personal access token saved with a single account binding in this browser, never synced or sent to Task Set. Reloading restores the binding automatically. There is no account-switch or disconnect flow; expired or revoked tokens can be renewed only for the bound account. Repository choices are remembered on this device. Refresh also rediscovers accessible repositories. Activity refreshes every minute while the view is open, and failures are shown as incomplete results. The Merge on GitHub action opens the PR at its merge section so the user reviews and confirms on GitHub. Direct merging inside Task Set and OAuth are not implemented.
+Decision of 27 September 2026: add a GitHub view for monitoring open PRs and branches ahead across selected repositories, with Select all. PR rows show drafts, merge blockers, and checks; branches compare with their default branch and show ahead/behind counts. Repository access comes from a personal access token saved with a single account binding in this browser, never synced or sent to Task Set. Reloading restores the binding automatically. There is no account-switch or disconnect flow; expired or revoked tokens can be renewed only for the bound account. Repository choices are remembered on this device. Account verification and initial repository discovery happen once during binding or token renewal. Activity Refresh uses the saved repository list; Reload repositories explicitly discovers newly accessible repositories and remembers the updated list. Activity refreshes every minute while the view is visible, and failures are shown as incomplete results. Results arrive progressively, with two repositories and up to four detail/comparison operations per repository in flight. Each request times out after 15 seconds; a refresh has a 90-second budget and preserves loaded results on timeout. The Merge on GitHub action opens the PR at its merge section so the user reviews and confirms on GitHub. Direct merging inside Task Set and OAuth are not implemented.
+
+## Keep screen on
+
+Decision of 28 September 2026: Settings has an **Always on** switch remembered on this device. It requests a screen wake lock while Task Set is visible, releases it in the background or when turned off/signed out, and reacquires it on return. Unsupported browsers, denied requests, and device power-saving releases are stated in Settings.

@@ -1,10 +1,16 @@
 import type { GitHubActivity as Activity } from '../../../shared/types/github'
 
-export default function GitHubActivity({ activity, loading }: { activity: Activity | null; loading: boolean }) {
-  if (!activity) return <p className="agenda-empty" role="status">{loading ? 'Loading pull requests and comparing branches…' : 'Refresh to load activity.'}</p>
+export default function GitHubActivity({ activity, loading, completed, total }: { activity: Activity | null; loading: boolean; completed: number; total: number }) {
+  const progress = `Loading activity · ${completed} of ${total} repositories checked…`
+  if (!activity) return <p className="agenda-empty" role="status">{loading ? progress : 'Refresh to load activity.'}</p>
   return (
     <div className="github-activity" aria-busy={loading}>
-      <p className="modal-note" role="status">{loading ? 'Refreshing… Showing the previous snapshot.' : `Updated ${new Date(activity.updatedAt).toLocaleTimeString()}. Refreshes every minute while this view is open.`}</p>
+      <dl className="github-overview" aria-label="GitHub overview">
+        <div><dt>Repositories</dt><dd>{total}</dd></div>
+        <div><dt>Open PRs{loading ? ' loaded' : ''}</dt><dd>{activity.pulls.length}</dd></div>
+        <div><dt>Ahead branches{loading ? ' loaded' : ''}</dt><dd>{activity.branches.length}</dd></div>
+      </dl>
+      <p className="modal-note" role="status">{loading ? progress : `Updated ${new Date(activity.updatedAt).toLocaleTimeString()}. Refreshes every minute while this view is open.`}</p>
       {activity.warnings.length > 0 && (
         <details className="github-warnings">
           <summary>Some activity could not be loaded ({activity.warnings.length}). Results may be incomplete.</summary>
@@ -14,7 +20,7 @@ export default function GitHubActivity({ activity, loading }: { activity: Activi
       <section aria-labelledby="github-pulls-title">
         <h2 id="github-pulls-title" className="github-section-title">Open pull requests · {activity.pulls.length}</h2>
         <p className="modal-note">Merge on GitHub opens the PR’s merge section. Review the current checks and rules there before confirming.</p>
-        {activity.pulls.length === 0 && <p className="agenda-empty">{activity.warnings.length ? 'No pull requests loaded.' : 'No open pull requests in the selected repositories.'}</p>}
+        {activity.pulls.length === 0 && <p className="agenda-empty">{loading ? 'Checking pull requests…' : activity.warnings.length ? 'No pull requests loaded.' : 'No open pull requests in the selected repositories.'}</p>}
         {activity.pulls.map((pull) => (
           <article className="github-row" key={`${pull.repository}:${pull.number}`}>
             <div className="github-row-content">
@@ -29,7 +35,7 @@ export default function GitHubActivity({ activity, loading }: { activity: Activi
       </section>
       <section aria-labelledby="github-branches-title">
         <h2 id="github-branches-title" className="github-section-title">Ahead branches · {activity.branches.length}</h2>
-        {activity.branches.length === 0 && <p className="agenda-empty">{activity.warnings.length ? 'No ahead branches loaded.' : 'No branches ahead of their default branch.'}</p>}
+        {activity.branches.length === 0 && <p className="agenda-empty">{loading ? 'Comparing branches…' : activity.warnings.length ? 'No ahead branches loaded.' : 'No branches ahead of their default branch.'}</p>}
         {activity.branches.map((branch) => (
           <article className="github-row" key={`${branch.repository}:${branch.name}`}>
             <div className="github-row-content">

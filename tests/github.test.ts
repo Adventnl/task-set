@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { githubList, githubRequest } from '../src/connectors/githubConnector'
-import { bindGitHub, connectGitHub, isGitHubAuthenticationError, loadGitHubActivity, readGitHubBinding, readGitHubSelection, saveGitHubSelection } from '../src/services/githubService'
+import { bindGitHub, connectGitHub, discoverGitHubRepositories, isGitHubAuthenticationError, loadGitHubActivity, readGitHubBinding, readGitHubSelection, saveGitHubRepositories, saveGitHubSelection } from '../src/services/githubService'
 import { checkSummary, mergeStatus, parsePull, parseRepository } from '../src/shared/utils/github'
 
 const repo = { id: 1, full_name: 'owner/repo', default_branch: 'main' }
@@ -14,7 +14,7 @@ function mockApi(handler: (url: URL) => unknown | Response) {
   }))
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 describe('GitHub adapters', () => {
   it('validates repositories and constructs safe links instead of trusting API URLs', () => {
@@ -42,6 +42,24 @@ describe('GitHub adapters', () => {
 })
 
 describe('GitHub connector', () => {
+  it('bounds a stalled request and explains that it timed out', async () => {
+    const timeout = new AbortController()
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeout.signal)
+    vi.stubGlobal('fetch', vi.fn((_url, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+    })))
+    const request = githubRequest('/user', 't', signal())
+    timeout.abort(new DOMException('Timed out', 'TimeoutError'))
+    await expect(request).rejects.toThrow('took too long')
+  })
+
+  it('keeps cancellation distinct from timeout and reports network failures', async () => {
+    const controller = new AbortController()
+    controller.abort(new DOMException('Cancelled', 'AbortError'))
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Network error') }))
+    await expect(githubRequest('/user', 't', controller.signal)).rejects.toThrow('Cancelled')
+    await expect(githubRequest('/user', 't', signal())).rejects.toThrow('Could not reach GitHub')
+  })
   it('paginates beyond 100 items and sends credentials only to the GitHub API', async () => {
     mockApi((url) => url.searchParams.get('page') === '1' ? Array.from({ length: 100 }, (_, id) => ({ id })) : [{ id: 100 }])
     expect(await githubList('/user/repos?sort=full_name', 'test-token', signal())).toHaveLength(101)
@@ -63,6 +81,53 @@ describe('GitHub connector', () => {
 })
 
 describe('GitHub monitoring', () => {
+  it('publishes PRs before slow branch comparisons finish without re-verifying the account', async () => {
+    let finish!: (value: Response) => void
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      const path = new URL(input).pathname
+      if (path.endsWith('/pulls')) return Response.json([pull])
+      if (path.endsWith('/pulls/7')) return Response.json({ ...pull, mergeable: true, mergeable_state: 'clean' })
+      if (path.endsWith('/status')) return Response.json({ total_count: 0, state: 'pending' })
+      if (path.endsWith('/check-runs')) return Response.json({ check_runs: [] })
+      if (path.endsWith('/branches')) return Response.json([{ name: 'topic/one' }])
+      if (path.includes('/compare/')) return new Promise<Response>((resolve) => { finish = resolve })
+      throw new Error(`Unexpected request ${path}`)
+    }))
+    const progress = vi.fn()
+    const pending = loadGitHubActivity([parseRepository(repo)], 't', signal(), progress)
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    expect(progress.mock.calls[0][0].pulls).toHaveLength(1)
+    expect(progress.mock.calls[0][1]).toBe(0)
+    finish(Response.json({ ahead_by: 3, behind_by: 1 }))
+    const activity = await pending
+    expect(progress.mock.lastCall?.[1]).toBe(1)
+    expect(activity.branches).toHaveLength(1)
+    expect(progress.mock.calls[0][0].branches).toEqual([])
+    expect(fetch).not.toHaveBeenCalledWith('https://api.github.com/user', expect.anything())
+  })
+
+  it('loads independent repositories concurrently so one slow repository cannot hide others', async () => {
+    let finish!: (value: Response) => void
+    vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+      const path = new URL(input).pathname
+      if (path === '/repos/owner/repo/pulls') return new Promise<Response>((resolve) => { finish = resolve })
+      return Response.json([])
+    }))
+    const progress = vi.fn()
+    const pending = loadGitHubActivity([parseRepository(repo), { id: 2, name: 'owner/other', defaultBranch: 'main' }], 't', signal(), progress)
+    await vi.waitFor(() => expect(progress.mock.calls.some((call) => call[1] === 1)).toBe(true))
+    finish(Response.json([]))
+    await pending
+    expect(progress.mock.lastCall?.[1]).toBe(2)
+  })
+
+  it('rediscovers repositories separately without calling the account endpoint', async () => {
+    mockApi((url) => {
+      expect(url.pathname).toBe('/user/repos')
+      return [repo]
+    })
+    expect(await discoverGitHubRepositories('t', signal())).toEqual([parseRepository(repo)])
+  })
   it('discovers accessible repositories and the connected account', async () => {
     mockApi((url) => url.pathname === '/user' ? { login: 'owner' } : [repo])
     expect(await connectGitHub('t', signal())).toEqual({ login: 'owner', repositories: [parseRepository(repo)] })
@@ -85,9 +150,9 @@ describe('GitHub monitoring', () => {
     expect(activity.pulls).toHaveLength(2)
     expect(activity.pulls[0].checks).toBe('Checks passed')
     expect(activity.branches).toHaveLength(2)
-    expect(activity.branches[0]).toMatchObject({ name: 'topic/one', ahead: 3, behind: 0, pullUrl: 'https://github.com/owner/repo/pull/7' })
-    expect(activity.branches[0].compareUrl).toContain('main...topic%2Fone')
-    expect(activity.branches[1]).toMatchObject({ ahead: 1, behind: 2, pullUrl: null })
+    expect(activity.branches.find((branch) => branch.name === 'topic/one')).toMatchObject({ name: 'topic/one', ahead: 3, behind: 0, pullUrl: 'https://github.com/owner/repo/pull/7' })
+    expect(activity.branches.find((branch) => branch.name === 'topic/one')?.compareUrl).toContain('main...topic%2Fone')
+    expect(activity.branches.find((branch) => branch.name === 'diverged')).toMatchObject({ ahead: 1, behind: 2, pullUrl: null })
   })
 
   it('keeps PRs visible when detail permissions fail, reporting incomplete activity', async () => {
@@ -132,6 +197,9 @@ describe('permanent GitHub binding', () => {
     saveGitHubSelection('owner', [])
     expect(readGitHubBinding()).toEqual({ login: 'owner', token: 'first-token', repositories: [parseRepository(repo)] })
     expect(readGitHubSelection('owner')).toEqual([])
+    const binding = readGitHubBinding()!
+    saveGitHubRepositories(binding, [{ id: 2, name: 'owner/new', defaultBranch: 'main' }])
+    expect(readGitHubBinding()).toEqual({ ...binding, repositories: [{ id: 2, name: 'owner/new', defaultBranch: 'main' }] })
   })
 
   it('allows renewing the same account but rejects a different account without overwriting the binding', async () => {

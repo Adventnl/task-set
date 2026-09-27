@@ -1,6 +1,7 @@
 import type { MeetingNote } from '../src/shared/types/meeting'
 import type { SyncRecord } from '../src/shared/types/sync'
 import type { Capture, Task } from '../src/shared/types/task'
+import { requestsTaskGeneration } from '../src/shared/utils/capture'
 import type { Suggestion } from './validation'
 
 type Editable = { createdAt: string; updatedAt: string; deletedAt: string | null }
@@ -11,7 +12,7 @@ type RecordType = SyncRecord['type']
  * only accepted change to a stored capture is deletion. Returns null when nothing changes.
  */
 export function mergeCapture(existing: Capture | null, incoming: Capture): Capture | null {
-  if (!existing) return { ...incoming, ai: incoming.deletedAt ? null : 'queued' }
+  if (!existing) return { ...incoming, ai: incoming.deletedAt ? null : requestsTaskGeneration(incoming.text) ? 'queued' : 'ready' }
   if (existing.deletedAt || !incoming.deletedAt) return null
   return {
     ...existing,
@@ -108,7 +109,7 @@ export function suggestionTask(capture: Capture, suggestion: Suggestion, index: 
     reminderAt: suggestion.reminderAt,
     pinned: false,
     completedAt: null,
-    suggestionStatus: 'suggested',
+    suggestionStatus: requestsTaskGeneration(capture.text) ? null : 'suggested',
     createdAt: capture.createdAt,
     updatedAt: capture.createdAt,
     deletedAt: null,

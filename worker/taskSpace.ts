@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { LiveMessage, PullResponse, SyncRecord } from '../src/shared/types/sync'
 import type { Capture } from '../src/shared/types/task'
+import { requestsTaskGeneration } from '../src/shared/utils/capture'
 import { extractSuggestions } from './extraction'
 import { CHILD_TYPE, deletedRecord, mergeRecord, parentOf, suggestionTask } from './merge'
 import type { Suggestion } from './validation'
@@ -90,7 +91,7 @@ export class TaskSpace extends DurableObject<Env> {
   /** Requeues a capture whose extraction failed. Returns false when there is nothing to retry. */
   async retryAi(captureId: string): Promise<boolean> {
     const capture = this.readCapture(captureId)
-    if (!capture || capture.deletedAt || capture.ai !== 'failed') return false
+    if (!capture || capture.deletedAt || capture.ai !== 'failed' || !requestsTaskGeneration(capture.text)) return false
     const seq = this.latestSeq() + 1
     this.write({ type: 'capture', value: { ...capture, ai: 'queued' } }, seq)
     this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue VALUES (?, 0, ?)', captureId, Date.now())

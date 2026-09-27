@@ -1,6 +1,7 @@
 import { Download, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { InstallStatus } from '../../../shared/hooks/useInstallPrompt'
+import type { useKeepAwake } from '../../../shared/hooks/useKeepAwake'
 import type { Appearance } from '../../../shared/types/appearance'
 import type { SyncStatus } from '../../../shared/types/sync'
 import Modal from '../Modal'
@@ -26,6 +27,7 @@ const appearances: { id: Appearance; label: string; icon: LucideIcon }[] = [
 ]
 
 export default function SettingsDialog({
+  keepAwake,
   appearance,
   appearanceSaveFailed,
   status,
@@ -37,6 +39,7 @@ export default function SettingsDialog({
   onSignOut,
   onClose,
 }: {
+  keepAwake: ReturnType<typeof useKeepAwake>
   appearance: Appearance
   appearanceSaveFailed: boolean
   status: SyncStatus
@@ -88,6 +91,21 @@ export default function SettingsDialog({
           {appearanceSaveFailed ? 'This browser is blocking storage, so the choice lasts only until you reload.' : 'Applies to this device only.'}
         </p>
       </fieldset>
+      <section className="settings-section" aria-labelledby="settings-awake">
+        <label className="settings-toggle" htmlFor="keep-awake">
+          <span id="settings-awake" className="field-label">Always on</span>
+          <input id="keep-awake" type="checkbox" role="switch" checked={keepAwake.enabled} onChange={(event) => keepAwake.choose(event.target.checked)} aria-describedby="keep-awake-detail" />
+        </label>
+        <p className="modal-note" id="keep-awake-detail" role="status">
+          {keepAwake.status === 'active' ? 'Keeping your screen on while Task Set is visible.'
+            : keepAwake.status === 'unavailable' ? 'This browser does not support keeping the screen on.'
+            : keepAwake.status === 'error' ? 'The browser could not keep the screen on. Check battery-saving settings or try again.'
+            : keepAwake.status === 'paused' ? 'Paused. Returns when Task Set is visible; your device can also release it to save power.'
+            : keepAwake.status === 'requesting' ? 'Requesting screen access…' : 'Keep your screen on while Task Set is open and visible.'}
+        </p>
+        {(keepAwake.status === 'error' || keepAwake.status === 'paused') && <button className="button button-quiet" type="button" onClick={keepAwake.retry}>Try again</button>}
+        {keepAwake.saveFailed && <p className="modal-note">This choice lasts until reload because browser storage is blocked.</p>}
+      </section>
       <section className="settings-section" aria-labelledby="settings-app">
         <h3 id="settings-app" className="field-label">
           App

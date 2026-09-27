@@ -68,7 +68,7 @@
   --touch: 44px;
   --control: 36px;
   --check: 20px;
-  /* Height of the time line above a note; its ⋯ and selection circle center on it. */
+  /* Compact metadata and switch height. */
   --meta-row: 24px;
   --rail-width: 232px;
   --column: 720px;
@@ -371,13 +371,11 @@ legend {
 }
 
 .brand-mark {
-  width: 22px;
-  height: 22px;
-  display: inline-grid;
-  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  display: block;
+  object-fit: contain;
   border-radius: var(--radius-sm);
-  background: var(--text);
-  color: var(--canvas);
 }
 
 .brand-mark-large {
@@ -678,7 +676,10 @@ legend {
 }
 
 .capture {
-  padding: var(--space-3) 0 var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
   border-top: 1px solid var(--line);
 }
 
@@ -702,10 +703,14 @@ legend {
   gap: 3px;
 }
 
+.capture-tools {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .capture-more {
-  width: var(--control);
-  height: var(--control);
-  margin: calc((var(--meta-row) - var(--control)) / 2) calc(-1 * var(--space-2)) calc((var(--meta-row) - var(--control)) / 2) auto;
+  width: var(--touch);
+  height: var(--touch);
   opacity: 0;
 }
 
@@ -729,7 +734,7 @@ legend {
 }
 
 .select-check {
-  /* Centers the circle on the time line above the note. */
+  /* Centers the circle on the first line of note text. */
   margin-top: calc((var(--meta-row) - var(--touch)) / 2);
 }
 
@@ -744,45 +749,34 @@ legend {
 
 .capture-main {
   min-width: 0;
-}
-
-/* Suggestions and tasks cannot be used while selecting, so they recede behind the note. */
-.capture.is-selectable .capture-extras {
-  opacity: 0.55;
+  flex: 1;
 }
 
 .capture-text {
-  margin-top: 2px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: var(--text-note);
   line-height: 1.6;
 }
 
-.capture-status {
-  margin-top: var(--space-2);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.capture-status-error {
-  color: var(--danger);
-}
-
-.capture-tasks {
-  margin-top: var(--space-2);
-}
+.capture-head { margin-top: var(--space-2); }
 
 .capture-actions {
+  position: absolute;
+  top: 0;
+  right: calc(100% + var(--space-1));
+  z-index: 2;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: var(--space-2) 0 0 calc(-1 * var(--space-3));
+  flex-direction: column;
+  padding: var(--space-1);
+  min-width: calc(var(--touch) * 3);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-float);
 }
+
+.capture-actions .button { justify-content: flex-start; min-height: var(--touch); }
 
 .suggestions {
   margin-top: var(--space-3);
@@ -1801,6 +1795,37 @@ legend {
   margin-top: 0;
 }
 
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--touch);
+  cursor: pointer;
+}
+
+.settings-toggle input {
+  appearance: none;
+  width: var(--touch);
+  height: var(--meta-row);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-selected);
+  padding: 2px;
+  cursor: pointer;
+}
+
+.settings-toggle input::before {
+  content: '';
+  display: block;
+  width: var(--text-lg);
+  height: var(--text-lg);
+  border-radius: var(--radius-pill);
+  background: var(--text-secondary);
+}
+
+.settings-toggle input:checked { background: var(--accent-fill); border-color: var(--accent); }
+.settings-toggle input:checked::before { background: var(--on-accent); margin-left: auto; }
+
 .segmented {
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
@@ -2137,6 +2162,10 @@ textarea.text-field {
 .github-repositories { border: 0; padding: 0; margin: var(--space-2) 0 0; max-height: calc(var(--space-8) * 4); overflow-y: auto; }
 .github-repository { display: flex; align-items: center; gap: var(--space-3); min-height: var(--touch); }
 .github-repository span, .github-row-content { min-width: 0; overflow-wrap: anywhere; }
+.github-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-5); }
+.github-overview > div { padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.github-overview dt { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.github-overview dd { margin: var(--space-1) 0 0; font-size: var(--text-xl); font-weight: 650; }
 .github-section-title { font-size: var(--text-lg); margin-top: var(--space-6); }
 .github-row { padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
 .github-row h3 { font-size: var(--text-body); font-weight: 600; }

@@ -3,6 +3,7 @@ import { sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config
 import type { WorkspaceData } from '../types/sync'
 import type { ComposerTarget, Editor, View } from '../types/task'
 import { dateKey, longDayLabel, shortDayLabel } from '../utils/dates'
+import { requestsTaskGeneration } from '../utils/capture'
 import { scheduleLabel } from '../utils/meetingView'
 import { archivedTasks, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 import { useCalendarView } from './useCalendarView'
@@ -201,6 +202,8 @@ export function useWorkspaceView(data: WorkspaceData) {
     searchRef,
     feed,
     sections,
+    suggestions: tasks.filter((task) => task.suggestionStatus === 'suggested'),
+    generating: captures.filter((capture) => requestsTaskGeneration(capture.text) && (capture.ai === 'queued' || capture.ai === 'failed')),
     archive,
     counts,
     calendar,

@@ -4,7 +4,7 @@ import { extractSuggestions } from '../worker/extraction'
 
 const capture = {
   id: 'capture-1',
-  text: 'Email Sam',
+  text: 'Generate task: Email Sam',
   timeZone: 'UTC',
   createdAt: '2026-09-26T03:00:00.000Z',
 } as Capture
@@ -23,6 +23,16 @@ afterEach(() => {
 })
 
 describe('task extraction', () => {
+  it('does not call either model for an ordinary note or a negated command', async () => {
+    const run = vi.fn(async () => ({ response: answer }))
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    for (const text of ['Email Sam', 'I should email Sam tomorrow', 'Do not generate task: Email Sam']) {
+      expect(await extractSuggestions(env(run), { ...capture, text })).toEqual([])
+    }
+    expect(run).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+  })
   it('uses Workers AI and does not call OpenRouter when it answers', async () => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)

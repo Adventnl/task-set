@@ -1,4 +1,3 @@
-import { Check } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 /** Shown when the server asks this device to sign in. Local data stays on the device meanwhile. */
@@ -23,9 +22,7 @@ export default function SignInScreen({ onSignIn }: { onSignIn: (passcode: string
   return (
     <main className="sign-in">
       <form className="sign-in-form" onSubmit={submit}>
-        <span className="brand-mark brand-mark-large" aria-hidden="true">
-          <Check size={20} strokeWidth={3} />
-        </span>
+        <img className="brand-mark brand-mark-large" src="/icons/icon-192.png" alt="" width="48" height="48" />
         <h1>Task Set</h1>
         <p>Enter your passcode to sync this device.</p>
         <label className="field-label" htmlFor="passcode">

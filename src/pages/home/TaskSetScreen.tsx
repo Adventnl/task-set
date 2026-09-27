@@ -21,6 +21,7 @@ import { useAppearance } from '../../shared/hooks/useAppearance'
 import { useDictation } from '../../shared/hooks/useDictation'
 import { useGitHub } from '../../shared/hooks/useGitHub'
 import { useInstallPrompt } from '../../shared/hooks/useInstallPrompt'
+import { useKeepAwake } from '../../shared/hooks/useKeepAwake'
 import { useSchedule } from '../../shared/hooks/useSchedule'
 import { useTaskSet } from '../../shared/hooks/useTaskSet'
 import { useWorkspaceView } from '../../shared/hooks/useWorkspaceView'
@@ -36,6 +37,7 @@ export default function TaskSetScreen() {
   const appearance = useAppearance()
   const installer = useInstallPrompt()
   const data = useTaskSet()
+  const keepAwake = useKeepAwake(data.sync.status !== 'signed-out')
   const schedule = useSchedule(data)
   const ui = useWorkspaceView(data.workspace)
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
@@ -74,12 +76,7 @@ export default function TaskSetScreen() {
     })
   }
   const actions: CaptureActions = {
-    onToggleTask: toggleTask,
-    onEditTask: editTask,
-    onAcceptSuggestion: (task) => void data.reviewSuggestion(task, 'accept'),
-    onDismissSuggestion: (task) => void data.reviewSuggestion(task, 'dismiss'),
     onCreateTask: (capture) => ui.setEditor({ captureId: capture.id }),
-    onRetry: (capture) => void data.retrySuggestions(capture),
     onDelete: (capture) => confirmDeleteCaptures([capture]),
     onToggleSelected: (capture) => ui.toggleSelected(capture.id),
   }
@@ -101,7 +98,6 @@ export default function TaskSetScreen() {
         return (
           <CaptureFeed
             days={ui.feed.days}
-            tasksByCapture={ui.feed.tasksByCapture}
             search={ui.search.trim()}
             selectedIds={ui.selecting ? ui.selectedIds : null}
             scrollRef={scrollRef}
@@ -113,7 +109,15 @@ export default function TaskSetScreen() {
         return (
           <div role="tabpanel" id={TASKS_PANEL} aria-labelledby={tabId(ui.view)}>
             {ui.view === 'tasks' ? (
-              <TaskList sections={ui.sections} onToggle={toggleTask} onEdit={editTask} onTogglePin={(task) => void data.togglePin(task)} />
+              <TaskList
+                sections={ui.sections}
+                suggestions={ui.suggestions}
+                generating={ui.generating}
+                onToggle={toggleTask} onEdit={editTask} onTogglePin={(task) => void data.togglePin(task)}
+                onAccept={(task) => void data.reviewSuggestion(task, 'accept')}
+                onDismiss={(task) => void data.reviewSuggestion(task, 'dismiss')}
+                onRetry={(capture) => void data.retrySuggestions(capture)}
+              />
             ) : (
               <ArchiveList items={ui.archive} onRestore={toggleTask} onDelete={confirmDeleteTask} />
             )}
@@ -231,6 +235,7 @@ export default function TaskSetScreen() {
       {ui.confirmation && <ConfirmDialog {...ui.confirmation} onClose={() => ui.setConfirmation(null)} />}
       {ui.settingsOpen && (
         <SettingsDialog
+          keepAwake={keepAwake}
           appearance={appearance.appearance}
           appearanceSaveFailed={appearance.saveFailed}
           status={data.sync.status}

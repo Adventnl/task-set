@@ -1,8 +1,8 @@
 // Task Set service worker. It keeps the app shell available offline and never touches /api:
 // data lives in IndexedDB and syncs through the page, not through this cache.
 
-const CACHE = 'task-set-shell-v1'
-const STATIC = ['/manifest.webmanifest', '/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png']
+const CACHE = 'task-set-shell-v2'
+const STATIC = ['/manifest.webmanifest', '/icon.png', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png']
 
 function assetPaths(html) {
   return [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1])

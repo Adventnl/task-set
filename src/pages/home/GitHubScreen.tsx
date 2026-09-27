@@ -16,9 +16,9 @@ export default function GitHubScreen({ github }: { github: ReturnType<typeof use
               <a className="button button-quiet" href={`https://github.com/${encodeURIComponent(github.login)}`} target="_blank" rel="noopener noreferrer">Open GitHub ↗</a>
             </div>
           </div>
-          <RepositoryPicker repositories={github.repositories} selected={github.selected} onChoose={github.choose} />
+          <RepositoryPicker repositories={github.repositories} selected={github.selected} discovering={github.discovering} onReload={() => void github.reloadRepositories()} onChoose={github.choose} />
           {github.storageError && <p className="form-error" role="alert">{github.storageError}</p>}
-          {github.selected.length ? <GitHubActivity activity={github.activity} loading={github.loading} /> : <p className="agenda-empty">Select repositories to monitor their pull requests and branches.</p>}
+          {github.selected.length ? <GitHubActivity activity={github.activity} loading={github.loading} completed={github.completed} total={github.selected.length} /> : <p className="agenda-empty">Select repositories to monitor their pull requests and branches.</p>}
         </>
       )}
     </div>

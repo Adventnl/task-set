@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearLocalData, loadData, readOutbox, saveLocal } from '../src/services/localDataService'
-import { deleteCaptures, purgeExpiredTasks, setTaskCompleted, setTaskPinned } from '../src/services/workspaceService'
+import { deleteCaptures, purgeExpiredTasks, saveTask, setTaskCompleted, setTaskPinned } from '../src/services/workspaceService'
 import type { SyncRecord } from '../src/shared/types/sync'
 import type { Capture, Task } from '../src/shared/types/task'
 
@@ -77,5 +77,12 @@ describe('workspace operations', () => {
     const [record] = await setTaskPinned(tasks[1], true)
     expect(record.value).toMatchObject({ id: 'tb', pinned: true })
     expect(record.value.updatedAt > tasks[1].updatedAt).toBe(true)
+  })
+
+  it('creates a task without changing the original note', async () => {
+    await saveTask({ captureId: 'a' }, { title: 'A separate task', dueAt: null, reminderAt: null, pinned: false })
+    const data = await loadData()
+    expect(data.captures).toEqual(captures)
+    expect(data.tasks.some((task) => task.title === 'A separate task' && task.captureId === 'a')).toBe(true)
   })
 })

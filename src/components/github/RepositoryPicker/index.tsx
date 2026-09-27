@@ -1,14 +1,17 @@
 import type { GitHubRepository } from '../../../shared/types/github'
 
-export default function RepositoryPicker({ repositories, selected, onChoose }: {
+export default function RepositoryPicker({ repositories, selected, discovering, onReload, onChoose }: {
   repositories: GitHubRepository[]
   selected: number[]
+  discovering: boolean
+  onReload: () => void
   onChoose: (ids: number[]) => void
 }) {
   return (
     <details className="github-picker" open={selected.length === 0}>
       <summary>Repositories · {selected.length} of {repositories.length} selected</summary>
       <div className="github-actions">
+        <button className="button button-quiet" type="button" onClick={onReload} disabled={discovering}>{discovering ? 'Finding repositories…' : 'Reload repositories'}</button>
         <button className="button button-quiet" type="button" onClick={() => onChoose(repositories.map((repo) => repo.id))}>Select all</button>
         <button className="button button-quiet" type="button" onClick={() => onChoose([])}>Clear selection</button>
       </div>

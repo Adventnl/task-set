@@ -1,4 +1,4 @@
-import { Check, Download } from 'lucide-react'
+import { Download } from 'lucide-react'
 import type { Section } from '../../../shared/config/views'
 import type { SyncStatus as Status } from '../../../shared/types/sync'
 import SyncStatus from '../SyncStatus'
@@ -24,9 +24,7 @@ export default function NavigationRail({
   return (
     <aside className="rail">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <Check size={13} strokeWidth={3} />
-        </span>
+        <img className="brand-mark" src="/icons/icon-192.png" alt="" width="24" height="24" />
         Task Set
       </div>
       <ViewNavigation section={section} counts={counts} variant="rail" onSelect={onSelect} />
