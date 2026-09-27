@@ -15,7 +15,7 @@ const answer = {
 const expected = [{ title: 'Email Sam', dueAt: null, reminderAt: null }]
 
 function env(run: () => Promise<unknown>, secrets: { OPENROUTER_API_KEY?: string } = { OPENROUTER_API_KEY: 'test-key' }) {
-  return { AI: { run: vi.fn(run) }, ...secrets } as unknown as Pick<Env, 'AI'> & { OPENROUTER_API_KEY?: string }
+  return { AI: { run: vi.fn(run) }, ...secrets } as unknown as { AI: Env['AI']; OPENROUTER_API_KEY?: string }
 }
 
 afterEach(() => {
@@ -63,6 +63,20 @@ describe('task extraction', () => {
       throw new Error('Workers AI is unavailable')
     })
     await expect(extractSuggestions(failing, capture)).rejects.toThrow('OpenRouter returned HTTP 402')
+  })
+
+  it('goes straight to OpenRouter when there is no Workers AI binding, as in preview deployments', async () => {
+    const fetch = vi.fn(async () => Response.json({ choices: [{ message: { content: JSON.stringify(answer) } }] }))
+    vi.stubGlobal('fetch', fetch)
+    await expect(extractSuggestions({ OPENROUTER_API_KEY: 'test-key' }, capture)).resolves.toEqual(expected)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails clearly when there is neither a Workers AI binding nor an OpenRouter key', async () => {
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    await expect(extractSuggestions({}, capture)).rejects.toThrow('No AI is set up')
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('fails when OpenRouter answers without a message', async () => {

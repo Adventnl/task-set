@@ -1,5 +1,6 @@
 import { ARCHIVE_DAYS } from '../config/archive'
 import type { Capture, Editor, Task, TaskInput, View } from '../types/task'
+import { DAY_MS, dateKey, dayOffset } from './dates'
 
 export interface TaskSection {
   id: 'pinned' | 'undated' | 'scheduled'
@@ -17,24 +18,6 @@ export interface CaptureDay {
   key: string
   label: string
   captures: Capture[]
-}
-
-const DAY_MS = 86_400_000
-
-function startOfDay(date: Date): Date {
-  const start = new Date(date)
-  start.setHours(0, 0, 0, 0)
-  return start
-}
-
-/** Whole local days from today: 0 today, 1 tomorrow, -1 yesterday. */
-function dayOffset(value: string, now: Date): number {
-  return Math.round((startOfDay(new Date(value)).getTime() - startOfDay(now).getTime()) / DAY_MS)
-}
-
-export function dayKey(value: string): string {
-  const date = new Date(value)
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
 }
 
 export function dayLabel(value: string, now = new Date()): string {
@@ -86,7 +69,8 @@ export function isOverdue(task: Task, now = new Date()): boolean {
   return !task.completedAt && !!task.dueAt && new Date(task.dueAt) < now
 }
 
-function isOpen(task: Task): boolean {
+/** Open tasks are listed in Tasks: not completed, and not an AI draft or a dismissed one. */
+export function isOpenTask(task: Task): boolean {
   return !task.completedAt && !task.suggestionStatus
 }
 
@@ -111,7 +95,7 @@ function byTaskOrder(a: Task, b: Task): number {
 
 /** Open tasks: pinned work, then work with no date, then scheduled work. Completed tasks are in the Archive. */
 export function taskSections(tasks: Task[]): TaskSection[] {
-  const open = tasks.filter(isOpen).sort(byTaskOrder)
+  const open = tasks.filter(isOpenTask).sort(byTaskOrder)
   const sections: TaskSection[] = [
     { id: 'pinned', label: 'Pinned', tasks: open.filter((task) => task.pinned) },
     { id: 'undated', label: 'No date', tasks: open.filter((task) => !task.pinned && !taskWhen(task)) },
@@ -121,7 +105,7 @@ export function taskSections(tasks: Task[]): TaskSection[] {
 }
 
 export function openTaskCount(tasks: Task[]): number {
-  return tasks.filter(isOpen).length
+  return tasks.filter(isOpenTask).length
 }
 
 /** The Archive, most recently completed first. Tasks past their retention are left out. */
@@ -138,16 +122,35 @@ export function expiredTasks(tasks: Task[], now = new Date()): Task[] {
   return tasks.filter((task) => isArchived(task) && archiveExpiry(task) <= now.getTime())
 }
 
-function plural(count: number, noun: string): string {
+export function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
 
-/** The line under a view's title. `matches` is set while searching Notes. */
-export function viewDetail(view: View, counts: { notes: number; openTasks: number; matches: number | null }): string {
-  if (view === 'archive') return `Completed tasks stay here for ${ARCHIVE_DAYS} days`
-  if (view === 'tasks') return counts.openTasks ? `${counts.openTasks} open` : 'Nothing open'
-  if (counts.matches !== null) return plural(counts.matches, 'matching note')
-  return counts.notes ? plural(counts.notes, 'note') : 'No notes yet'
+export interface ViewCounts {
+  notes: number
+  openTasks: number
+  /** Set while searching Notes. */
+  matches: number | null
+  /** Calendar events from today on. */
+  upcoming: number
+  meetings: number
+}
+
+/** The line under a view's title. */
+export function viewDetail(view: View, counts: ViewCounts): string {
+  switch (view) {
+    case 'archive':
+      return `Completed tasks stay here for ${ARCHIVE_DAYS} days`
+    case 'tasks':
+      return counts.openTasks ? `${counts.openTasks} open` : 'Nothing open'
+    case 'calendar':
+      return counts.upcoming ? `${counts.upcoming} coming up` : 'Nothing coming up'
+    case 'meetings':
+      return counts.meetings ? plural(counts.meetings, 'meeting') : 'No meetings yet'
+    case 'feed':
+      if (counts.matches !== null) return plural(counts.matches, 'matching note')
+      return counts.notes ? plural(counts.notes, 'note') : 'No notes yet'
+  }
 }
 
 /** Links open tasks and suggestions to captures, filters by search, and groups captures by day. */
@@ -169,7 +172,7 @@ export function selectCaptureData(captures: Capture[], tasks: Task[], search: st
     : captures
   const days: CaptureDay[] = []
   for (const capture of visibleCaptures) {
-    const key = dayKey(capture.createdAt)
+    const key = dateKey(capture.createdAt)
     if (days.at(-1)?.key !== key) days.push({ key, label: dayLabel(capture.createdAt), captures: [] })
     days[days.length - 1].captures.push(capture)
   }

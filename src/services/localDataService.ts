@@ -1,14 +1,26 @@
-import type { SyncRecord } from '../shared/types/sync'
+import type { CalendarEvent } from '../shared/types/calendar'
+import type { Meeting, MeetingNote } from '../shared/types/meeting'
+import type { SyncRecord, WorkspaceData } from '../shared/types/sync'
 import type { Capture, Task } from '../shared/types/task'
-import { recordKey } from '../shared/utils/records'
+import { byCreatedAt, recordKey } from '../shared/utils/records'
 
 const DATABASE_NAME = 'task-set'
-const DATABASE_VERSION = 2
+const DATABASE_VERSION = 3
 const CAPTURES = 'captures'
 const TASKS = 'tasks'
 const OUTBOX = 'outbox'
 const META = 'meta'
 const CURSOR_KEY = 'cursor'
+
+/** One object store per record type, named after its list in `WorkspaceData`. */
+const STORES = {
+  capture: CAPTURES,
+  task: TASKS,
+  event: 'events',
+  meeting: 'meetings',
+  meetingNote: 'meetingNotes',
+} as const satisfies Record<SyncRecord['type'], keyof WorkspaceData>
+const RECORD_STORES = Object.values(STORES)
 
 /** A local change waiting to reach the server. `rev` detects edits made while a push is in flight. */
 export interface OutboxEntry {
@@ -63,12 +75,15 @@ function openDatabase(): Promise<IDBDatabase> {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
     request.onupgradeneeded = (event) => {
       const database = request.result
-      for (const name of [CAPTURES, TASKS]) {
+      for (const name of RECORD_STORES) {
         if (!database.objectStoreNames.contains(name)) database.createObjectStore(name, { keyPath: 'id' })
       }
       if (!database.objectStoreNames.contains(OUTBOX)) database.createObjectStore(OUTBOX, { keyPath: 'key' })
       if (!database.objectStoreNames.contains(META)) database.createObjectStore(META)
-      if (event.oldVersion === 1 && request.transaction) migrateFromV1(request.transaction)
+      if (!request.transaction) return
+      if (event.oldVersion === 1) migrateFromV1(request.transaction)
+      // An older app skipped record types it did not know yet; pulling from the start fetches them.
+      if (event.oldVersion > 0) request.transaction.objectStore(META).delete(CURSOR_KEY)
     }
     request.onsuccess = () => {
       const database = request.result
@@ -95,26 +110,33 @@ function complete(transaction: IDBTransaction): Promise<void> {
 }
 
 function storeFor(record: SyncRecord): string {
-  return record.type === 'capture' ? CAPTURES : TASKS
+  return STORES[record.type]
 }
 
-export async function loadData(): Promise<{ captures: Capture[]; tasks: Task[] }> {
+export async function loadData(): Promise<WorkspaceData> {
   const database = await openDatabase()
-  const transaction = database.transaction([CAPTURES, TASKS], 'readonly')
-  const captures = transaction.objectStore(CAPTURES).getAll()
-  const tasks = transaction.objectStore(TASKS).getAll()
-  await complete(transaction)
-  const byCreatedAt = (a: Capture | Task, b: Capture | Task) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
-  return {
-    captures: (captures.result as Capture[]).filter((item) => !item.deletedAt).sort(byCreatedAt),
-    tasks: (tasks.result as Task[]).filter((item) => !item.deletedAt).sort(byCreatedAt),
+  const transaction = database.transaction(RECORD_STORES, 'readonly')
+  // Each list is read once the transaction completes; deletions never reach the screen.
+  const read = <T extends Capture | Task | CalendarEvent | Meeting | MeetingNote>(name: string) => {
+    const request = transaction.objectStore(name).getAll()
+    return () => (request.result as T[]).filter((item) => !item.deletedAt).sort(byCreatedAt)
   }
+  const captures = read<Capture>(STORES.capture)
+  const tasks = read<Task>(STORES.task)
+  const events = read<CalendarEvent>(STORES.event)
+  const meetings = read<Meeting>(STORES.meeting)
+  const meetingNotes = read<MeetingNote>(STORES.meetingNote)
+  await complete(transaction)
+  return { captures: captures(), tasks: tasks(), events: events(), meetings: meetings(), meetingNotes: meetingNotes() }
 }
 
-/** Saves local edits and queues them for sync in one transaction, so neither can happen alone. */
-export async function saveLocal(records: SyncRecord[]): Promise<void> {
+/**
+ * Saves local edits and queues them for sync in one transaction, so neither can happen alone.
+ * Returns the records, so an operation can save and hand them on in one step.
+ */
+export async function saveLocal(records: SyncRecord[]): Promise<SyncRecord[]> {
   const database = await openDatabase()
-  const transaction = database.transaction([CAPTURES, TASKS, OUTBOX], 'readwrite')
+  const transaction = database.transaction([...RECORD_STORES, OUTBOX], 'readwrite')
   for (const record of records) {
     const store = transaction.objectStore(storeFor(record))
     if (record.value.deletedAt) store.delete(record.value.id)
@@ -122,6 +144,7 @@ export async function saveLocal(records: SyncRecord[]): Promise<void> {
     transaction.objectStore(OUTBOX).put({ key: recordKey(record), rev: crypto.randomUUID(), record } satisfies OutboxEntry)
   }
   await complete(transaction)
+  return records
 }
 
 export async function readOutbox(limit: number): Promise<OutboxEntry[]> {
@@ -152,7 +175,7 @@ export async function acknowledgeOutbox(entries: OutboxEntry[]): Promise<void> {
  */
 export async function applyRemote(records: SyncRecord[], cursor: number): Promise<SyncRecord[]> {
   const database = await openDatabase()
-  const transaction = database.transaction([CAPTURES, TASKS, OUTBOX, META], 'readwrite')
+  const transaction = database.transaction([...RECORD_STORES, OUTBOX, META], 'readwrite')
   const applied: SyncRecord[] = []
   const pendingRequest = transaction.objectStore(OUTBOX).getAllKeys()
   pendingRequest.onsuccess = () => {
@@ -189,8 +212,9 @@ export async function countOutbox(): Promise<number> {
 /** Removes every local record, queued change, and sync cursor from this browser. */
 export async function clearLocalData(): Promise<void> {
   const database = await openDatabase()
-  const transaction = database.transaction([CAPTURES, TASKS, OUTBOX, META], 'readwrite')
-  for (const name of [CAPTURES, TASKS, OUTBOX, META]) transaction.objectStore(name).clear()
+  const stores = [...RECORD_STORES, OUTBOX, META]
+  const transaction = database.transaction(stores, 'readwrite')
+  for (const name of stores) transaction.objectStore(name).clear()
   await complete(transaction)
 }
 

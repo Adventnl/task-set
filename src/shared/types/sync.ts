@@ -1,8 +1,22 @@
+import type { CalendarEvent } from './calendar'
+import type { Meeting, MeetingNote } from './meeting'
 import type { Capture, Task } from './task'
 
 export type SyncRecord =
   | { type: 'capture'; value: Capture }
   | { type: 'task'; value: Task }
+  | { type: 'event'; value: CalendarEvent }
+  | { type: 'meeting'; value: Meeting }
+  | { type: 'meetingNote'; value: MeetingNote }
+
+/** Every record on this device that has not been deleted, oldest first. */
+export interface WorkspaceData {
+  captures: Capture[]
+  tasks: Task[]
+  events: CalendarEvent[]
+  meetings: Meeting[]
+  meetingNotes: MeetingNote[]
+}
 
 export interface PullResponse {
   records: SyncRecord[]

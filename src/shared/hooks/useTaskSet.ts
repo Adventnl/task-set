@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadData } from '../../services/localDataService'
 import * as workspace from '../../services/workspaceService'
-import type { SyncRecord } from '../types/sync'
+import type { SyncRecord, WorkspaceData } from '../types/sync'
 import type { Capture, Editor, Task, TaskInput } from '../types/task'
-import { mergeRecords } from '../utils/records'
+import { EMPTY_WORKSPACE, mergeRecords } from '../utils/records'
 import { useSync } from './useSync'
 
-const EMPTY = { captures: [] as Capture[], tasks: [] as Task[] }
 /** How long Undo stays offered after a task moves to the Archive. */
 const UNDO_MS = 6_000
 
-/** Owns the captures and tasks on screen, the local-first actions on them, and sync. */
+/**
+ * Owns the workspace on screen, sync, and the local-first steps every change takes. Actions on
+ * notes and tasks live here; `useSchedule` builds calendar and meeting actions on `commit` and `persist`.
+ */
 export function useTaskSet() {
-  const [data, setData] = useState(EMPTY)
+  const [data, setData] = useState<WorkspaceData>(EMPTY_WORKSPACE)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
   const [announcement, setAnnouncement] = useState('')
@@ -22,7 +24,7 @@ export function useTaskSet() {
 
   const merge = useCallback((records: SyncRecord[]) => setData((current) => mergeRecords(current, records)), [])
   // Sync starts after the local copy is on screen, so pulled changes always apply on top of it.
-  const sync = useSync({ enabled: !loading, onApplied: merge, onReset: () => setData(EMPTY) })
+  const sync = useSync({ enabled: !loading, onApplied: merge, onReset: () => setData(EMPTY_WORKSPACE) })
   const requestSync = sync.sync
 
   useEffect(() => {
@@ -85,6 +87,18 @@ export function useTaskSet() {
     [merge, requestSync],
   )
 
+  /** Throws on failure so an editor can keep its fields and explain. */
+  const persist = useCallback(
+    async (operation: () => Promise<SyncRecord[]>, done: string): Promise<SyncRecord[]> => {
+      const records = await operation()
+      merge(records)
+      setAnnouncement(done)
+      void requestSync()
+      return records
+    },
+    [merge, requestSync],
+  )
+
   const sendCapture = (text: string, kind: Capture['kind']) =>
     commit(`send:${text}`, () => workspace.createCapture(text, kind), 'Saved', 'Could not save that on this device. Your words are still in the box; try again.')
 
@@ -120,11 +134,8 @@ export function useTaskSet() {
   const reviewSuggestion = (task: Task, action: 'accept' | 'dismiss') =>
     commit(task.id, () => workspace.reviewSuggestion(task, action), action === 'accept' ? 'Task created' : 'Suggestion dismissed', 'Could not update that suggestion. Try again.')
 
-  /** Throws on failure so the editor can keep its fields and explain. */
-  async function saveTask(editor: Editor, input: TaskInput) {
-    merge(await workspace.saveTask(editor, input))
-    setAnnouncement(editor.task ? 'Task saved' : 'Task created')
-    void requestSync()
+  const saveTask = async (editor: Editor, input: TaskInput) => {
+    await persist(() => workspace.saveTask(editor, input), editor.task ? 'Task saved' : 'Task created')
   }
 
   const deleteTask = (task: Task) => commit(task.id, () => workspace.deleteTask(task), 'Task deleted; the note is kept', 'Could not delete that task. Try again.')
@@ -139,13 +150,14 @@ export function useTaskSet() {
   }
 
   return {
-    captures: data.captures,
-    tasks: data.tasks,
+    workspace: data,
     loading,
     notice,
     setNotice,
     announcement,
     sync,
+    commit,
+    persist,
     sendCapture,
     deleteCaptures,
     toggleTask,

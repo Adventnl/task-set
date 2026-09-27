@@ -1,6 +1,6 @@
 # Task Set: product and build plan
 
-Status: revised 26 September 2026. Phases 1–4 are implemented as one installable web app for Mac and phone, with live sync and automatic AI suggestions. `task.hanoryx.com` is the intended host name; deployment has not been completed.
+Status: revised 27 September 2026. Phases 1–4 are implemented as one installable web app for Mac and phone, with live sync and automatic AI suggestions, plus a Calendar and Meetings (see [Calendar and meetings](#calendar-and-meetings)). `task.hanoryx.com` is the intended host name; deployment has not been completed.
 
 ## The problem
 
@@ -66,6 +66,15 @@ Implementation status (26 September 2026): phone capture uses the same web app, 
 
 Build the Android experience after the Mac workflow and sync model are proven. Android can become the designated reminder device so a reminder does not alert on every device; an already scheduled alert must still fire without network access. Windows and native macOS clients can follow if browser limits justify them. iPhone support remains later. Any new client uses the same source capture and task semantics.
 
+## Calendar and meetings
+
+Decision of 27 September 2026, from the owner's request: the app is four features, not three views. **Notes** and **Tasks** stay; the **Archive** becomes a tab of Tasks (Open and Archive), since it is the same list of work before and after it is done. Two features are added:
+
+- **Calendar.** Ordinary calendars make a note on a day cost a form: start and end times, reminders, alarms, and a time zone. Here, choosing a day and typing or talking (the same composer and microphone as notes) puts an **event** on that day, and nothing else is asked. An event is only a local date and words. Days with events are tinted so they are obvious, and the home page (Notes) counts down to the next three: “Today”, “Tomorrow”, “In 4 days”. The calendar is site-wide: open tasks show on the day of their due date (or reminder, when there is no due date), and meetings show on every day they happen.
+- **Meetings.** Not a meeting tool, but meeting notes. A meeting is a name, a day, an optional time, and whether it happens once or every week; weekly meetings appear on the calendar every week. Each meeting day has its own notes. A meeting opens on its next day, so its notes are the things to bring up next time; any other day can be opened to write or read notes for that meeting.
+
+Implementation status (27 September 2026): built and checked end to end with a local Worker and two browsers. Events, meetings, and meeting notes are three new synced record types with the same local-first outbox, last-edit-wins merging, and final deletions as tasks. The server links each meeting note to its meeting, as it links each task to its capture, so deleting a parent deletes its children on every device, and a child written offline for a parent deleted elsewhere is deleted too. Days and times are plain local values (`YYYY-MM-DD`, `HH:mm`), so they never move with daylight saving or travel. Meeting notes are not sent to AI. Notifications for events and meetings are not sent yet, like task reminders.
+
 ## Proposed implementation boundaries
 
 | Part | Initial direction |
@@ -88,6 +97,8 @@ The target is no additional monthly service charge for normal personal use, subj
 - Completing or snoozing a task updates online devices; reconnect fetches missed changes without duplicate tasks.
 - The designated Android phone delivers an already scheduled reminder while offline.
 - Reaching an AI usage limit does not block text capture, manual tasks, local reminders, or later retry.
+- Choosing a calendar day and typing or saying a few words puts them on that day with no other fields; the day is visibly marked, and Notes counts down to it.
+- A weekly meeting appears on the calendar every week; notes written in it belong to its next meeting day, and every other day's notes stay findable.
 
 ## Product decision to test
 

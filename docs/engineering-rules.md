@@ -69,7 +69,7 @@ src/
   shared/config/
 ```
 
-The current single-page app uses `pages/home`; `app`, `auth`, `capture`, and `task` components; the `useTaskSet`, `useSync`, `useDictation`, `useWorkspaceView`, and `useAppearance` hooks; `localDataService`, `syncService`, `speechService`, `workspaceService`, and `appearanceService`; and the `sync`, `ai`, and `speech` connectors. The Cloudflare Worker lives in `worker/` and shares record types and validation with the app through `src/shared`. Add `router/` only when real URL routes are introduced; do not build routing for the two in-page views (Feed and Tasks). `src/styles.css` is the existing global stylesheet.
+The current single-page app uses `pages/home` (the `TaskSetScreen` shell plus `CalendarScreen` and `MeetingsScreen`); `app`, `auth`, `capture`, `task`, `calendar`, and `meeting` components; the `useTaskSet`, `useSchedule`, `useSync`, `useDictation`, `useWorkspaceView`, `useCalendarView`, `useMeetingsView`, `useInstallPrompt`, and `useAppearance` hooks; `localDataService`, `syncService`, `speechService`, `workspaceService`, `calendarService`, `meetingService`, and `appearanceService`; and the `sync`, `ai`, and `speech` connectors. Pure date and view logic lives in `shared/utils` (`dates`, `taskView`, `calendarView`, `meetingView`, `records`). The Cloudflare Worker lives in `worker/` and shares record types and validation with the app through `src/shared`. Add `router/` only when real URL routes are introduced; do not build routing for the in-page sections (Notes, Tasks, Calendar, Meetings) or a meeting's page. `src/styles.css` is the existing global stylesheet.
 
 Rules:
 

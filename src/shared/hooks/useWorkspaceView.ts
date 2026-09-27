@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Capture, Editor, Task, View } from '../types/task'
-import { VIEW_LABELS } from '../config/views'
-import { archivedTasks, dayKey, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
+import { sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
+import type { WorkspaceData } from '../types/sync'
+import type { ComposerTarget, Editor, View } from '../types/task'
+import { dateKey, longDayLabel, shortDayLabel } from '../utils/dates'
+import { scheduleLabel } from '../utils/meetingView'
+import { archivedTasks, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
+import { useCalendarView } from './useCalendarView'
+import { useMeetingsView } from './useMeetingsView'
 
 const CLOCK_MS = 60_000
 const NO_SELECTION: ReadonlySet<string> = new Set()
+const NOTE_TARGET: ComposerTarget = { kind: 'note' }
+const NOTE_COMPOSER = { target: NOTE_TARGET, placeholder: 'Write a note…', label: 'New note' }
 
 function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
@@ -17,8 +24,12 @@ export interface Confirmation {
   onConfirm: () => Promise<unknown>
 }
 
-/** Which view and dialog are open, search, note selection, keyboard shortcuts, and the lists they derive. */
-export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
+/**
+ * Which view and dialog are open, search, note selection, keyboard shortcuts, where the composer
+ * sends, and the lists each view derives. The calendar and meetings keep their own state.
+ */
+export function useWorkspaceView(data: WorkspaceData) {
+  const { captures, tasks } = data
   const [view, setView] = useState<View>('feed')
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -29,11 +40,13 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  // Changes only when the date does, so day labels and Archive countdowns roll over after midnight.
-  const [today, setToday] = useState(() => dayKey(new Date().toISOString()))
+  // Changes only when the date does, so day labels, countdowns, and the Archive roll over after midnight.
+  const [today, setToday] = useState(() => dateKey(new Date()))
+  const calendar = useCalendarView(data, today)
+  const meetings = useMeetingsView(data, today)
 
   useEffect(() => {
-    const timer = window.setInterval(() => setToday(dayKey(new Date().toISOString())), CLOCK_MS)
+    const timer = window.setInterval(() => setToday(dateKey(new Date())), CLOCK_MS)
     return () => window.clearInterval(timer)
   }, [])
 
@@ -66,12 +79,18 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
     })
   }
 
-  function selectView(next: View) {
+  function show(next: View) {
     setView(next)
     if (next !== 'feed') {
       closeSearch()
       stopSelecting()
     }
+  }
+
+  /** Choosing Meetings while it is open goes back to the list. */
+  function selectView(next: View) {
+    if (next === 'meetings' && view === 'meetings') meetings.closeMeeting()
+    show(next)
   }
 
   useEffect(() => {
@@ -100,13 +119,47 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
   const sections = useMemo(() => (view === 'tasks' ? taskSections(tasks) : []), [tasks, view])
   const archive = useMemo(() => archivedTasks(tasks), [tasks, today])
   const taskCount = useMemo(() => openTaskCount(tasks), [tasks])
-  const counts: Record<View, number> = { feed: captures.length, tasks: taskCount, archive: archive.length }
-  const detail = viewDetail(view, { notes: captures.length, openTasks: taskCount, matches: search.trim() ? feed.matchCount : null })
+  const counts: Record<Section, number> = {
+    feed: captures.length,
+    tasks: taskCount,
+    calendar: calendar.upcoming.length,
+    meetings: data.meetings.length,
+  }
+  const shownMeeting = view === 'meetings' ? meetings.meeting : null
+
+  /** On the calendar the composer adds to the selected day; in a meeting, to the day on screen. */
+  function composerFor() {
+    if (view === 'calendar') {
+      const day = calendar.selected
+      const target: ComposerTarget = { kind: 'event', date: day }
+      return { target, placeholder: day === today ? 'Add to today…' : `Add to ${shortDayLabel(day)}…`, label: `Add to ${longDayLabel(day, today)}` }
+    }
+    if (shownMeeting && meetings.detail) {
+      const { date, next } = meetings.detail
+      const target: ComposerTarget = { kind: 'meetingNote', meetingId: shownMeeting.id, date }
+      return {
+        target,
+        placeholder: date === next ? 'Add to the next meeting…' : `Add to ${shortDayLabel(date)}…`,
+        label: `Note for ${shownMeeting.title} on ${longDayLabel(date, today)}`,
+      }
+    }
+    return NOTE_COMPOSER
+  }
 
   return {
     view,
+    section: sectionOf(view),
     selectView,
-    showFeed: () => selectView('feed'),
+    showFeed: () => show('feed'),
+    openCalendarDay: (date: string) => {
+      show('calendar')
+      calendar.select(date)
+    },
+    openMeetingDay: (id: string, date: string) => {
+      show('meetings')
+      meetings.openMeeting(id, date)
+    },
+    today,
     searchOpen,
     search,
     setSearch,
@@ -121,8 +174,22 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
     selectedCaptures,
     allSelected,
     toggleSelectAll: () => setSelectedIds(allSelected ? NO_SELECTION : new Set(feed.captures.map((capture) => capture.id))),
-    title: VIEW_LABELS[view],
-    detail,
+    title: shownMeeting ? shownMeeting.title : VIEW_LABELS[sectionOf(view)],
+    detail: shownMeeting
+      ? scheduleLabel(shownMeeting, today)
+      : viewDetail(view, {
+          notes: captures.length,
+          openTasks: taskCount,
+          matches: search.trim() ? feed.matchCount : null,
+          upcoming: calendar.upcoming.length,
+          meetings: data.meetings.length,
+        }),
+    taskTabs: [
+      { id: 'tasks' as const, label: TASK_TAB_LABELS.tasks, count: taskCount },
+      { id: 'archive' as const, label: TASK_TAB_LABELS.archive, count: archive.length },
+    ],
+    composer: composerFor(),
+    focusComposer: () => composerRef.current?.focus(),
     editor,
     setEditor,
     settingsOpen,
@@ -135,5 +202,7 @@ export function useWorkspaceView(captures: Capture[], tasks: Task[]) {
     sections,
     archive,
     counts,
+    calendar,
+    meetings,
   }
 }

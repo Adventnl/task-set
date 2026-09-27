@@ -101,13 +101,17 @@ describe('task sections', () => {
   })
 
   it('describes each view under its title', () => {
-    const counts = { notes: 1, openTasks: 3, matches: null }
+    const counts = { notes: 1, openTasks: 3, matches: null, upcoming: 2, meetings: 1 }
     expect(viewDetail('feed', counts)).toBe('1 note')
     expect(viewDetail('feed', { ...counts, notes: 0 })).toBe('No notes yet')
     expect(viewDetail('feed', { ...counts, matches: 2 })).toBe('2 matching notes')
     expect(viewDetail('tasks', counts)).toBe('3 open')
     expect(viewDetail('tasks', { ...counts, openTasks: 0 })).toBe('Nothing open')
     expect(viewDetail('archive', counts)).toBe('Completed tasks stay here for 60 days')
+    expect(viewDetail('calendar', counts)).toBe('2 coming up')
+    expect(viewDetail('calendar', { ...counts, upcoming: 0 })).toBe('Nothing coming up')
+    expect(viewDetail('meetings', counts)).toBe('1 meeting')
+    expect(viewDetail('meetings', { ...counts, meetings: 0 })).toBe('No meetings yet')
   })
 })
 

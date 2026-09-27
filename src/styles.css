@@ -72,6 +72,8 @@
   --meta-row: 24px;
   --rail-width: 232px;
   --column: 720px;
+  /* Height of a day in the month grid: room for its date and three previews. */
+  --day-cell: 84px;
   --gutter: var(--space-6);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 120ms;
@@ -525,6 +527,26 @@ legend {
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.back-link {
+  min-height: var(--control);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 var(--space-1) calc(-1 * var(--space-2));
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.back-link:hover {
+  background: var(--surface-hover);
 }
 
 .workspace-title p {
@@ -632,6 +654,10 @@ legend {
   color: var(--text-muted);
   font-size: var(--text-md);
   line-height: 1.6;
+}
+
+.empty-state-action {
+  margin-top: var(--space-4);
 }
 
 /* ---------- Notes ---------- */
@@ -1021,6 +1047,468 @@ legend {
   margin-right: calc(-1 * var(--space-2));
 }
 
+/* ---------- Tabs ---------- */
+
+/* An underline, so tabs inside a view never look like the view navigation above them. */
+.tabs {
+  width: min(100% - 2 * var(--gutter), var(--column));
+  margin: 0 auto var(--space-3);
+  display: flex;
+  gap: var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  min-height: var(--control);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  transition: border-color var(--fast) ease, color var(--fast) ease;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected='true'] {
+  border-bottom-color: var(--accent-fill);
+  color: var(--text);
+}
+
+.tab:focus-visible {
+  outline-offset: -2px;
+}
+
+.tab-count {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Coming up ---------- */
+
+.coming-up {
+  width: min(100% - 2 * var(--gutter), var(--column));
+  margin: 0 auto var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.coming-up-item {
+  min-width: 0;
+  min-height: var(--touch);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  text-align: left;
+  transition: background-color var(--fast) ease;
+}
+
+.coming-up-item:hover {
+  background: var(--accent-soft-hover);
+}
+
+.coming-up-when {
+  overflow: hidden;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Up to two lines, so a narrow card still says what is coming. */
+.coming-up-text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.coming-up-item.is-today {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.coming-up-item.is-today:hover {
+  background: var(--accent-fill-hover);
+}
+
+.coming-up-item.is-today .coming-up-when {
+  color: var(--on-accent);
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+}
+
+.calendar-month {
+  min-width: 0;
+  flex: 1;
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.calendar-bar .button {
+  margin-right: var(--space-1);
+}
+
+.calendar-grid,
+.calendar-week {
+  display: grid;
+  gap: 2px;
+}
+
+.calendar-week {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+/* A hairline between weeks gives the month its rhythm without boxing every day. */
+.calendar-week + .calendar-week {
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+
+.calendar-weekday {
+  padding: 0 var(--space-2) var(--space-1);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.calendar-cell {
+  min-width: 0;
+  display: flex;
+}
+
+.calendar-day {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--day-cell);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+  transition: background-color var(--fast) ease, box-shadow var(--fast) ease;
+}
+
+.calendar-day:hover {
+  background: var(--surface-hover);
+}
+
+/* A day with an event is tinted, so the things you put on the calendar stand out at a glance. */
+.calendar-day[data-events] {
+  background: var(--accent-soft);
+}
+
+.calendar-day[data-events]:hover {
+  background: var(--accent-soft-hover);
+}
+
+[aria-selected='true'] > .calendar-day {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.calendar-day[data-outside] {
+  color: var(--text-muted);
+}
+
+.calendar-day[data-outside] .calendar-previews {
+  opacity: 0.6;
+}
+
+.calendar-date {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-day[aria-current='date'] .calendar-date {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.calendar-previews {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.calendar-preview {
+  overflow: hidden;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.calendar-preview[data-kind='event'] {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.calendar-more {
+  padding: 0 var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* ---------- Day agenda and list rows ---------- */
+
+.agenda {
+  margin-top: var(--space-5);
+}
+
+.agenda-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 var(--space-3);
+  padding-bottom: var(--space-2);
+}
+
+.agenda-title {
+  font-size: var(--text-body);
+  font-weight: 650;
+}
+
+.agenda-when {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.agenda-when.is-ahead {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.agenda-list,
+.row-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-row,
+.list-row {
+  width: 100%;
+  min-height: calc(var(--touch) + var(--space-1));
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  text-align: left;
+}
+
+.agenda-row:hover .agenda-text,
+.list-row:hover .list-row-title {
+  color: var(--accent);
+}
+
+.agenda-icon,
+.agenda-chevron,
+.list-row-chevron {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.agenda-event .agenda-icon {
+  color: var(--accent);
+}
+
+.agenda-body,
+.list-row-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agenda-event .agenda-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.agenda-text,
+.list-row-title {
+  font-size: var(--text-body);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agenda-meta,
+.list-row-meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.list-row-when {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.list-row-when.is-soon {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.agenda-empty {
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+/* ---------- Meetings ---------- */
+
+.meeting-day {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--sidebar);
+}
+
+.meeting-day .icon-button {
+  border-radius: 50%;
+}
+
+.meeting-day-label {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-1) 0;
+  text-align: center;
+}
+
+.meeting-day-date {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.meeting-day-when {
+  margin-top: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1) var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.meeting-day-badge {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.meeting-to-next {
+  display: block;
+  margin: var(--space-2) auto 0;
+}
+
+.meeting-notes,
+.meeting > .agenda-empty {
+  margin-top: var(--space-4);
+}
+
+.meeting-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.meeting-note-text {
+  min-width: 0;
+  flex: 1;
+  padding: var(--space-3) 0;
+  font-size: var(--text-note);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.meeting-note-delete {
+  margin: var(--space-1) calc(-1 * var(--space-2)) 0 0;
+  opacity: 0;
+}
+
+.meeting-note:hover .meeting-note-delete,
+.meeting-note-delete:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .meeting-note-delete {
+    opacity: 1;
+  }
+}
+
+.meeting > .task-section {
+  margin-top: var(--space-6);
+}
+
 /* ---------- Composer ---------- */
 
 .dock {
@@ -1387,6 +1875,26 @@ legend {
   min-width: 0;
 }
 
+textarea.text-field {
+  min-height: calc(2 * var(--touch));
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field-label-spaced {
+  margin-top: var(--space-4);
+}
+
+.field-optional {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.editor-section {
+  margin-top: var(--space-3);
+}
+
 /* ---------- Sign in ---------- */
 
 .sign-in {
@@ -1425,6 +1933,7 @@ legend {
   :root {
     --gutter: var(--space-4);
     --text-xl: 28px;
+    --day-cell: 48px;
   }
 
   .app {
@@ -1524,6 +2033,52 @@ legend {
   .suggestion-actions {
     margin-left: calc(-1 * var(--space-3));
   }
+
+  .coming-up-item {
+    padding: var(--space-2);
+  }
+
+  /* Days shrink to their date and a dot per item; the agenda below names them. */
+  .calendar-week + .calendar-week {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .calendar-weekday {
+    padding: 0 0 var(--space-1);
+    text-align: center;
+  }
+
+  .calendar-day {
+    align-items: center;
+    padding: var(--space-1) 0;
+  }
+
+  .calendar-previews {
+    flex-direction: row;
+    justify-content: center;
+    gap: 3px;
+  }
+
+  .calendar-preview {
+    width: 6px;
+    height: 6px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  .calendar-preview-text,
+  .calendar-more {
+    display: none;
+  }
+}
+
+/* Four view names fill a phone's segmented control; each view's title line carries its count. */
+@media (max-width: 430px) {
+  .view-nav-tabs .view-nav-count {
+    display: none;
+  }
 }
 
 /* The smallest phones keep labels readable by showing some actions as icons alone. */
@@ -1534,9 +2089,22 @@ legend {
   }
 
   .selection-delete-label,
-  .archive-action-label,
-  .view-nav-tabs .view-nav-count {
+  .archive-action-label {
     display: none;
+  }
+
+  .view-nav-tabs .view-nav-item {
+    padding: 0 var(--space-1);
+  }
+
+  /* The month name, Today, and the arrows share one row. */
+  .calendar-month {
+    font-size: var(--text-md);
+  }
+
+  .calendar-bar .button {
+    margin-right: 0;
+    padding: 0 var(--space-2);
   }
 }
 
