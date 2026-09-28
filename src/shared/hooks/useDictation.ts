@@ -3,12 +3,20 @@ import { startDictation, type Dictation } from '../../services/speechService'
 
 export type DictationPhase = 'idle' | 'starting' | 'listening' | 'transcribing'
 
-/** Hold-to-talk state. `onResult` receives the final text once speech ends. */
+/** A shorter hold is taken as a slip and not sent. */
+const MIN_HOLD_MS = 1_000
+const TOO_SHORT = 'Recording too short. Hold for at least a second while you talk.'
+
+/**
+ * Hold-to-talk state. `onResult` receives the final text once speech ends. Finishing less than
+ * `MIN_HOLD_MS` after starting cancels instead and explains why.
+ */
 export function useDictation(onResult: (text: string) => void) {
   const [phase, setPhase] = useState<DictationPhase>('idle')
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState('')
   const sessionRef = useRef<Dictation | null>(null)
+  const startedAt = useRef(0)
   const resultRef = useRef(onResult)
   useEffect(() => {
     resultRef.current = onResult
@@ -25,6 +33,7 @@ export function useDictation(onResult: (text: string) => void) {
     setError('')
     setTranscript('')
     setPhase('starting')
+    startedAt.current = performance.now()
     sessionRef.current = startDictation({
       onListening: () => setPhase('listening'),
       onTranscript: setTranscript,
@@ -40,12 +49,17 @@ export function useDictation(onResult: (text: string) => void) {
     })
   }, [reset])
 
-  const finish = useCallback(() => sessionRef.current?.finish(), [])
-
   const cancel = useCallback(() => {
     sessionRef.current?.cancel()
     reset()
   }, [reset])
+
+  const finish = useCallback(() => {
+    if (!sessionRef.current) return
+    if (performance.now() - startedAt.current >= MIN_HOLD_MS) return sessionRef.current.finish()
+    cancel()
+    setError(TOO_SHORT)
+  }, [cancel])
 
   useEffect(() => () => sessionRef.current?.cancel(), [])
 

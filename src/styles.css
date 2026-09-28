@@ -361,6 +361,7 @@ legend {
 }
 
 .brand {
+  min-height: var(--control);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -384,7 +385,7 @@ legend {
   border-radius: var(--radius-lg);
 }
 
-.view-nav-rail {
+.view-nav {
   display: grid;
   gap: 2px;
 }
@@ -435,8 +436,9 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
-.view-nav-tabs,
-.mobile-only {
+.mobile-only,
+.rail-close,
+.rail-scrim {
   display: none;
 }
 
@@ -517,6 +519,7 @@ legend {
 
 .workspace-title {
   min-width: 0;
+  flex: 1;
 }
 
 .workspace-title h1 {
@@ -760,6 +763,20 @@ legend {
 }
 
 .capture-head { margin-top: var(--space-2); }
+
+.capture-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.capture-status-error {
+  color: var(--danger);
+}
 
 .capture-actions {
   position: absolute;
@@ -1515,8 +1532,8 @@ legend {
 .composer {
   display: flex;
   align-items: flex-end;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-4);
+  gap: var(--space-1);
+  padding: var(--space-1);
   border: 1px solid var(--line-strong);
   border-radius: 26px;
   background: var(--surface);
@@ -1530,8 +1547,13 @@ legend {
 }
 
 .composer.is-talking {
-  padding-left: var(--space-1);
   border-color: var(--recording);
+}
+
+.composer-mode {
+  flex: none;
+  border-radius: 50%;
+  color: var(--text-secondary);
 }
 
 .composer textarea {
@@ -1549,33 +1571,11 @@ legend {
 }
 
 .composer textarea::placeholder,
-.dictation-placeholder {
+.recording-placeholder {
   color: var(--text-muted);
 }
 
-.dictation {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-1);
-}
-
-.dictation .icon-button {
-  border-radius: 50%;
-}
-
-.dictation-text {
-  flex: 1;
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 11px 0;
-  font-size: var(--text-body);
-  line-height: 1.4;
-}
-
-.send-button,
-.talk-button {
+.send-button {
   width: var(--touch);
   height: var(--touch);
   flex: none;
@@ -1585,30 +1585,94 @@ legend {
   border-radius: 50%;
   background: var(--accent-fill);
   color: var(--on-accent);
-  transition: background-color var(--fast) ease, transform var(--fast) var(--ease);
+  transition: background-color var(--fast) ease;
 }
 
-.send-button:hover,
-.talk-button:hover:not(:disabled) {
+.send-button:hover {
   background: var(--accent-fill-hover);
 }
 
-.talk-button {
+/* Hold to talk: the whole bar is the target, and a press must never scroll, select, or open a menu. */
+.talk-bar {
+  min-width: 0;
+  min-height: var(--touch);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: var(--text-body);
+  font-weight: 600;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  transition: background-color var(--fast) ease, color var(--fast) ease;
 }
 
-.talk-button.is-active {
+.talk-bar:hover:not(:disabled) {
+  background: var(--surface-selected);
+}
+
+.talk-bar.is-active,
+.talk-bar.is-active:hover:not(:disabled) {
   background: var(--recording);
   color: var(--surface);
-  transform: scale(1.08);
   animation: listening 1.4s ease-out infinite;
 }
 
-.talk-button.is-active:hover:not(:disabled) {
-  background: var(--recording);
+.talk-bar.is-cancelling,
+.talk-bar.is-cancelling:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+  animation: none;
+}
+
+.talk-bar:disabled {
+  color: var(--text-muted);
+}
+
+/* Floats above the composer while recording, so the notes underneath never move. */
+.recording {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-dialog);
+  animation: toast-in var(--medium) var(--ease);
+}
+
+.recording-text {
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: var(--text-body);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.recording-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.recording.is-cancelling {
+  border-color: var(--danger);
+}
+
+.recording.is-cancelling .recording-hint {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 @keyframes listening {
@@ -1651,7 +1715,6 @@ legend {
   border-radius: var(--radius-pill);
 }
 
-.composer-hint,
 .selection-hint {
   margin-top: var(--space-2);
   padding: 0 var(--space-4);
@@ -1689,6 +1752,12 @@ legend {
   color: var(--toast-text);
   box-shadow: var(--shadow-dialog);
   animation: toast-in var(--medium) var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes toast-in {
@@ -1965,8 +2034,47 @@ textarea.text-field {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* The sidebar becomes a drawer over the page, opened from the header's menu button. */
   .rail {
-    display: none;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: min(84vw, 300px);
+    padding-top: max(var(--space-4), env(safe-area-inset-top));
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    overflow-y: auto;
+    border-right: 1px solid var(--line-strong);
+    box-shadow: var(--shadow-dialog);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--medium) var(--ease), visibility 0s linear var(--medium);
+  }
+
+  .rail.is-open {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--medium) var(--ease);
+  }
+
+  .rail-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 19;
+    display: block;
+    background: var(--backdrop);
+    animation: fade-in var(--medium) ease;
+  }
+
+  .rail-close {
+    display: grid;
+    margin: 0 calc(-1 * var(--space-2)) 0 auto;
+    border-radius: 50%;
+  }
+
+  .view-nav-item,
+  .rail-install {
+    min-height: var(--touch);
+    font-size: var(--text-md);
   }
 
   .mobile-only {
@@ -1975,67 +2083,28 @@ textarea.text-field {
 
   .workspace-header {
     align-items: center;
+    gap: var(--space-2);
     padding: max(var(--space-4), env(safe-area-inset-top)) 0 var(--space-3);
   }
 
-  .sync-status-compact .sync-label {
-    display: none;
-  }
-
-  .sync-status-compact {
+  .menu-button {
     position: relative;
-    width: var(--touch);
-    height: var(--touch);
-    justify-content: center;
-    padding: 0;
+    flex: none;
+    margin-left: calc(-1 * var(--space-2));
+    border-radius: 50%;
   }
 
-  /* The sync dot becomes a badge on the settings icon. */
-  .sync-status-compact .sync-dot {
+  /* Shown only while this device is not synced. */
+  .menu-button .sync-dot {
     position: absolute;
-    top: 10px;
-    right: 9px;
+    top: 9px;
+    right: 8px;
     box-shadow: 0 0 0 2px var(--canvas);
   }
 
-  /* Leaves room for the title, settings, and select buttons beside it. */
+  /* Leaves room for the menu button, the title, and the select button beside it. */
   .search-field {
     width: min(240px, 100vw - 194px);
-  }
-
-  .view-nav-tabs {
-    width: min(100% - 2 * var(--gutter), var(--column));
-    margin: 0 auto var(--space-2);
-    display: grid;
-    grid-auto-columns: minmax(0, 1fr);
-    grid-auto-flow: column;
-    gap: 2px;
-    padding: 2px;
-    border-radius: var(--radius-md);
-    background: var(--surface-hover);
-  }
-
-  .view-nav-tabs .view-nav-item {
-    min-height: var(--control);
-    justify-content: center;
-    gap: var(--space-1);
-    padding: 0 var(--space-2);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-sm);
-    font-weight: 600;
-  }
-
-  .view-nav-tabs .view-nav-icon {
-    display: none;
-  }
-
-  .view-nav-tabs .view-nav-item[aria-current='page'] {
-    background: var(--surface);
-    box-shadow: var(--shadow-float), inset 0 0 0 1px var(--line-strong);
-  }
-
-  .view-nav-tabs .view-nav-count {
-    margin-left: 0;
   }
 
   .modal {
@@ -2099,13 +2168,6 @@ textarea.text-field {
   }
 }
 
-/* View names fill a phone's segmented control; each view's title line carries its count. */
-@media (max-width: 430px) {
-  .view-nav-tabs .view-nav-count {
-    display: none;
-  }
-}
-
 /* The smallest phones keep labels readable by showing some actions as icons alone. */
 @media (max-width: 380px) {
   .selection-delete {
@@ -2116,10 +2178,6 @@ textarea.text-field {
   .selection-delete-label,
   .archive-action-label {
     display: none;
-  }
-
-  .view-nav-tabs .view-nav-item {
-    padding: 0 var(--space-1);
   }
 
   /* The month name, Today, and the arrows share one row. */
@@ -2141,9 +2199,6 @@ textarea.text-field {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
-  }
-  .talk-button.is-active {
-    transform: none;
   }
 }
 
@@ -2175,5 +2230,4 @@ textarea.text-field {
 .github-warnings { margin-top: var(--space-4); color: var(--danger); overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .github-row { align-items: flex-start; flex-direction: column; gap: var(--space-3); }
-  .view-nav-tabs { grid-auto-flow: initial; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

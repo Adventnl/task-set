@@ -1,4 +1,5 @@
-import { requestTaskRetry } from '../connectors/aiConnector'
+import { requestTaskGeneration, requestTaskRetry } from '../connectors/aiConnector'
+import { writeClipboard } from '../connectors/clipboardConnector'
 import type { SyncRecord } from '../shared/types/sync'
 import type { Capture, Editor, Task, TaskInput } from '../shared/types/task'
 import { markDeleted } from '../shared/utils/records'
@@ -68,4 +69,14 @@ export function reviewSuggestion(task: Task, action: 'accept' | 'dismiss'): Prom
 
 export function retryTaskSuggestions(capture: Capture): Promise<void> {
   return requestTaskRetry(capture.id)
+}
+
+/** Asks the server to find tasks in a note and create them; they arrive by sync. */
+export function generateTasks(capture: Capture): Promise<void> {
+  return requestTaskGeneration(capture.id)
+}
+
+/** Must be called straight from a user gesture: browsers only allow copying in response to one. */
+export function copyCapture(capture: Capture): Promise<void> {
+  return writeClipboard(capture.text)
 }

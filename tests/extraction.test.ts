@@ -23,20 +23,20 @@ afterEach(() => {
 })
 
 describe('task extraction', () => {
-  it('does not call either model for an ordinary note or a negated command', async () => {
+  it('tells the model the author asked for tasks only when they did', async () => {
+    vi.stubGlobal('fetch', vi.fn())
     const run = vi.fn(async () => ({ response: answer }))
-    const fetch = vi.fn()
-    vi.stubGlobal('fetch', fetch)
-    for (const text of ['Email Sam', 'I should email Sam tomorrow', 'Do not generate task: Email Sam']) {
-      expect(await extractSuggestions(env(run), { ...capture, text })).toEqual([])
-    }
-    expect(run).not.toHaveBeenCalled()
-    expect(fetch).not.toHaveBeenCalled()
+    await extractSuggestions(env(run), capture, 'create')
+    await extractSuggestions(env(run), { ...capture, kind: 'voice', text: 'Email Sam' }, 'suggest')
+    const system = (call: number) => (run.mock.calls[call] as unknown as [string, { messages: { content: string }[] }])[1].messages[0].content
+    expect(system(0)).toContain('The author asked for tasks from this note.')
+    expect(system(1)).not.toContain('The author asked for tasks from this note.')
+    expect(system(1)).toContain('You turn one personal note into to-do suggestions.')
   })
   it('uses Workers AI and does not call OpenRouter when it answers', async () => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
-    await expect(extractSuggestions(env(async () => ({ response: answer })), capture)).resolves.toEqual(expected)
+    await expect(extractSuggestions(env(async () => ({ response: answer })), capture, 'create')).resolves.toEqual(expected)
     expect(fetch).not.toHaveBeenCalled()
   })
 
@@ -46,7 +46,7 @@ describe('task extraction', () => {
     const allocationUsed = env(async () => {
       throw new Error('3036: You have used up your daily free allocation of 10,000 neurons.')
     })
-    await expect(extractSuggestions(allocationUsed, capture)).resolves.toEqual(expected)
+    await expect(extractSuggestions(allocationUsed, capture, 'create')).resolves.toEqual(expected)
 
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://openrouter.ai/api/v1/chat/completions')
@@ -63,7 +63,7 @@ describe('task extraction', () => {
     const noKey = env(async () => {
       throw new Error('Workers AI is unavailable')
     }, {})
-    await expect(extractSuggestions(noKey, capture)).rejects.toThrow('Workers AI is unavailable')
+    await expect(extractSuggestions(noKey, capture, 'create')).rejects.toThrow('Workers AI is unavailable')
     expect(fetch).not.toHaveBeenCalled()
   })
 
@@ -72,20 +72,20 @@ describe('task extraction', () => {
     const failing = env(async () => {
       throw new Error('Workers AI is unavailable')
     })
-    await expect(extractSuggestions(failing, capture)).rejects.toThrow('OpenRouter returned HTTP 402')
+    await expect(extractSuggestions(failing, capture, 'create')).rejects.toThrow('OpenRouter returned HTTP 402')
   })
 
   it('goes straight to OpenRouter when there is no Workers AI binding, as in preview deployments', async () => {
     const fetch = vi.fn(async () => Response.json({ choices: [{ message: { content: JSON.stringify(answer) } }] }))
     vi.stubGlobal('fetch', fetch)
-    await expect(extractSuggestions({ OPENROUTER_API_KEY: 'test-key' }, capture)).resolves.toEqual(expected)
+    await expect(extractSuggestions({ OPENROUTER_API_KEY: 'test-key' }, capture, 'create')).resolves.toEqual(expected)
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('fails clearly when there is neither a Workers AI binding nor an OpenRouter key', async () => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
-    await expect(extractSuggestions({}, capture)).rejects.toThrow('No AI is set up')
+    await expect(extractSuggestions({}, capture, 'create')).rejects.toThrow('No AI is set up')
     expect(fetch).not.toHaveBeenCalled()
   })
 
@@ -94,6 +94,6 @@ describe('task extraction', () => {
     const failing = env(async () => {
       throw new Error('Workers AI is unavailable')
     })
-    await expect(extractSuggestions(failing, capture)).rejects.toThrow('OpenRouter response had no answer')
+    await expect(extractSuggestions(failing, capture, 'create')).rejects.toThrow('OpenRouter response had no answer')
   })
 })

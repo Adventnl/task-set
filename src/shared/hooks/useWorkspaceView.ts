@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
+import { NARROW_SCREEN_QUERY, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
 import type { WorkspaceData } from '../types/sync'
 import type { ComposerTarget, Editor, View } from '../types/task'
 import { dateKey, longDayLabel, shortDayLabel } from '../utils/dates'
-import { requestsTaskGeneration } from '../utils/capture'
 import { scheduleLabel } from '../utils/meetingView'
 import { archivedTasks, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 import { useCalendarView } from './useCalendarView'
@@ -39,6 +38,8 @@ export function useWorkspaceView(data: WorkspaceData) {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  const [navigationOpen, setNavigationOpen] = useState(false)
+  const navigationRef = useRef<HTMLButtonElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   // Changes only when the date does, so day labels, countdowns, and the Archive roll over after midnight.
@@ -50,6 +51,24 @@ export function useWorkspaceView(data: WorkspaceData) {
     const timer = window.setInterval(() => setToday(dateKey(new Date())), CLOCK_MS)
     return () => window.clearInterval(timer)
   }, [])
+
+  /** Closing the phone drawer returns focus to the menu button that opened it, once the page is no longer inert. */
+  function closeNavigation() {
+    if (!navigationOpen) return
+    setNavigationOpen(false)
+    requestAnimationFrame(() => navigationRef.current?.focus())
+  }
+
+  // The drawer exists only on narrow screens; widening the window closes it.
+  useEffect(() => {
+    if (!navigationOpen) return
+    const narrow = window.matchMedia(NARROW_SCREEN_QUERY)
+    const onChange = () => {
+      if (!narrow.matches) setNavigationOpen(false)
+    }
+    narrow.addEventListener('change', onChange)
+    return () => narrow.removeEventListener('change', onChange)
+  }, [navigationOpen])
 
   function openSearch() {
     setView('feed')
@@ -92,12 +111,15 @@ export function useWorkspaceView(data: WorkspaceData) {
   function selectView(next: View) {
     if (next === 'meetings' && view === 'meetings') meetings.closeMeeting()
     show(next)
+    closeNavigation()
   }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (document.querySelector('dialog[open]')) return
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (event.key === 'Escape' && navigationOpen) {
+        closeNavigation()
+      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         openSearch()
       } else if (event.key.toLowerCase() === 'n' && !event.metaKey && !event.ctrlKey && !event.altKey && !isTyping(event.target)) {
@@ -111,7 +133,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [searchOpen, selecting])
+  }, [searchOpen, selecting, navigationOpen])
 
   const feed = useMemo(() => selectCaptureData(captures, tasks, search), [captures, tasks, search, today])
   // Only messages still on screen count, so a search or another device's deletion never widens a delete.
@@ -195,7 +217,16 @@ export function useWorkspaceView(data: WorkspaceData) {
     editor,
     setEditor,
     settingsOpen,
-    setSettingsOpen,
+    /** Settings opens over the page, so the phone drawer closes first. */
+    openSettings: () => {
+      closeNavigation()
+      setSettingsOpen(true)
+    },
+    closeSettings: () => setSettingsOpen(false),
+    navigationOpen,
+    navigationRef,
+    openNavigation: () => setNavigationOpen(true),
+    closeNavigation,
     confirmation,
     setConfirmation,
     composerRef,
@@ -203,7 +234,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     feed,
     sections,
     suggestions: tasks.filter((task) => task.suggestionStatus === 'suggested'),
-    generating: captures.filter((capture) => requestsTaskGeneration(capture.text) && (capture.ai === 'queued' || capture.ai === 'failed')),
+    generating: captures.filter((capture) => capture.ai === 'queued' || capture.ai === 'failed'),
     archive,
     counts,
     calendar,

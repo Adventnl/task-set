@@ -13,6 +13,15 @@ export async function transcribeAudio(audio: Blob): Promise<string> {
   return result.text.trim()
 }
 
+/** Asks the server to find tasks in a capture and create them. The server queues the work and syncs the result. */
+export async function requestTaskGeneration(captureId: string): Promise<void> {
+  await requestJson('/api/ai/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ captureId }),
+  })
+}
+
 /** Asks the server to look for tasks in a capture again after its automatic attempts failed. */
 export async function requestTaskRetry(captureId: string): Promise<void> {
   await requestJson('/api/ai/retry', {
