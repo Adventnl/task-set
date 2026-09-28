@@ -58,6 +58,12 @@ async function transcribe(request: Request, env: Env): Promise<Response> {
   return text ? json({ text }) : json({ error: 'No speech was heard. Try again a little closer to the microphone.' }, 422)
 }
 
+async function readCaptureId(request: Request): Promise<string | null> {
+  const body = await readJson(request, 1024)
+  const captureId = body && typeof body === 'object' && 'captureId' in body ? body.captureId : null
+  return typeof captureId === 'string' ? captureId : null
+}
+
 async function route(request: Request, env: Env, url: URL): Promise<Response> {
   const unsafe = request.method !== 'GET' || request.headers.get('upgrade')?.toLowerCase() === 'websocket'
   if (unsafe && request.headers.get('origin') !== url.origin) return json({ error: 'Invalid origin' }, 403)
@@ -88,10 +94,18 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     case 'POST /api/ai/retry': {
       const { success } = await env.AI_RATE_LIMIT.limit({ key: 'retry' })
       if (!success) return json({ error: 'Too many retries. Try again in a minute.' }, 429)
-      const body = await readJson(request, 1024)
-      const captureId = body && typeof body === 'object' && 'captureId' in body ? body.captureId : null
-      if (typeof captureId !== 'string') return json({ error: 'Invalid request' }, 400)
+      const captureId = await readCaptureId(request)
+      if (!captureId) return json({ error: 'Invalid request' }, 400)
       return (await space.retryAi(captureId)) ? json({ queued: true }, 202) : json({ error: 'Nothing to retry' }, 409)
+    }
+    case 'POST /api/ai/generate': {
+      const { success } = await env.AI_RATE_LIMIT.limit({ key: 'generate' })
+      if (!success) return json({ error: 'Too many requests for tasks. Try again in a minute.' }, 429)
+      const captureId = await readCaptureId(request)
+      if (!captureId) return json({ error: 'Invalid request' }, 400)
+      return (await space.generateTasks(captureId))
+        ? json({ queued: true }, 202)
+        : json({ error: 'This note has not reached the server yet. Try again once it has synced.' }, 409)
     }
   }
   return json({ error: 'Not found' }, 404)

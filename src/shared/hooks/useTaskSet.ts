@@ -8,6 +8,8 @@ import { useSync } from './useSync'
 
 /** How long Undo stays offered after a task moves to the Archive. */
 const UNDO_MS = 6_000
+/** How long a confirmation such as “Note copied” stays on screen. */
+const FLASH_MS = 2_000
 
 /**
  * Owns the workspace on screen, sync, and the local-first steps every change takes. Actions on
@@ -19,6 +21,7 @@ export function useTaskSet() {
   const [notice, setNotice] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const [archivedId, setArchivedId] = useState<string | null>(null)
+  const [flash, setFlash] = useState('')
   const busyIds = useRef(new Set<string>())
   const purging = useRef(false)
 
@@ -66,6 +69,12 @@ export function useTaskSet() {
     const timer = window.setTimeout(() => setArchivedId(null), UNDO_MS)
     return () => window.clearTimeout(timer)
   }, [archivedId])
+
+  useEffect(() => {
+    if (!flash) return
+    const timer = window.setTimeout(() => setFlash(''), FLASH_MS)
+    return () => window.clearTimeout(timer)
+  }, [flash])
 
   /** Saves on this device, shows the change, then syncs. Returns false when the local save failed. */
   const commit = useCallback(
@@ -140,6 +149,34 @@ export function useTaskSet() {
 
   const deleteTask = (task: Task) => commit(task.id, () => workspace.deleteTask(task), 'Task deleted; the note is kept', 'Could not delete that task. Try again.')
 
+  /** Starts copying before any await, while the browser still counts the tap as a user gesture. */
+  async function copyCapture(capture: Capture) {
+    try {
+      await workspace.copyCapture(capture)
+      setAnnouncement('Note copied')
+      setFlash('Note copied')
+    } catch {
+      setNotice('Could not copy that note. Your browser may not allow copying here.')
+    }
+  }
+
+  async function generateTasks(capture: Capture) {
+    const key = `generate:${capture.id}`
+    if (busyIds.current.has(key)) return
+    busyIds.current.add(key)
+    try {
+      // A note written moments ago may not have reached the server yet.
+      if (capture.ai === null) await requestSync()
+      await workspace.generateTasks(capture)
+      setAnnouncement('Finding tasks')
+      void requestSync()
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not reach Task Set. Try again when you are online.')
+    } finally {
+      busyIds.current.delete(key)
+    }
+  }
+
   async function retrySuggestions(capture: Capture) {
     try {
       await workspace.retryTaskSuggestions(capture)
@@ -164,6 +201,10 @@ export function useTaskSet() {
     archivedTask,
     undoArchive: () => void (archivedTask && toggleTask(archivedTask)),
     dismissArchived: () => setArchivedId(null),
+    flash,
+    dismissFlash: () => setFlash(''),
+    copyCapture,
+    generateTasks,
     togglePin,
     reviewSuggestion,
     saveTask,

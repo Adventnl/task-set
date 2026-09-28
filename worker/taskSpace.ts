@@ -1,9 +1,9 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { LiveMessage, PullResponse, SyncRecord } from '../src/shared/types/sync'
 import type { Capture } from '../src/shared/types/task'
-import { requestsTaskGeneration } from '../src/shared/utils/capture'
+import { automaticGeneration } from '../src/shared/utils/capture'
 import { extractSuggestions } from './extraction'
-import { CHILD_TYPE, deletedRecord, mergeRecord, parentOf, suggestionTask } from './merge'
+import { AUTOMATIC_BATCH, CHILD_TYPE, deletedRecord, mergeRecord, parentOf, suggestionTask } from './merge'
 import type { Suggestion } from './validation'
 
 const PAGE_SIZE = 500
@@ -13,7 +13,13 @@ const AI_RETRY_BASE_MS = 15_000
 
 type RecordType = SyncRecord['type']
 type RecordRow = { type: RecordType; body: string; seq: number }
-type QueueRow = { capture_id: string; attempts: number }
+/** `batch` is null for automatic extraction and set for a request from a note's menu. */
+type QueueRow = { capture_id: string; attempts: number; batch: string | null }
+
+/** A fresh id prefix for one request from a note's menu, distinct from `AUTOMATIC_BATCH`. */
+function requestBatch(): string {
+  return `g${Date.now().toString(36)}-`
+}
 
 /**
  * One private workspace. SQLite holds every record with a change sequence number; devices pull
@@ -39,9 +45,13 @@ export class TaskSpace extends DurableObject<Env> {
         CREATE TABLE IF NOT EXISTS ai_queue (
           capture_id TEXT PRIMARY KEY,
           attempts INTEGER NOT NULL,
-          run_at INTEGER NOT NULL
+          run_at INTEGER NOT NULL,
+          batch TEXT
         );
       `)
+      // Before a note's menu could ask for tasks, every queued job was automatic.
+      const queueColumns = sql.exec<{ name: string }>('PRAGMA table_info(ai_queue)').toArray()
+      if (!queueColumns.some((column) => column.name === 'batch')) sql.exec('ALTER TABLE ai_queue ADD COLUMN batch TEXT;')
       // Before meetings, the only parent was a capture, in a column named for it.
       const columns = sql.exec<{ name: string }>('PRAGMA table_info(records)').toArray()
       if (columns.some((column) => column.name === 'capture_id')) {
@@ -78,7 +88,7 @@ export class TaskSpace extends DurableObject<Env> {
       const next = this.withoutDeletedParent(merged)
       this.write(next, ++seq)
       if (next.type === 'capture' && next.value.ai === 'queued') {
-        this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue VALUES (?, 0, ?)', next.value.id, Date.now())
+        this.enqueue(next.value.id, null)
         queued = true
       }
       if (next.value.deletedAt) seq = this.deleteChildren(next, seq)
@@ -88,15 +98,26 @@ export class TaskSpace extends DurableObject<Env> {
     return { cursor: seq }
   }
 
-  /** Requeues a capture whose extraction failed. Returns false when there is nothing to retry. */
+  /**
+   * Finds tasks in a note because its menu asked, and creates them. Each request gets its own id
+   * prefix, so asking again adds what the model finds again. While the note is already queued this
+   * does nothing. Returns false when the note does not exist on the server.
+   */
+  async generateTasks(captureId: string): Promise<boolean> {
+    const capture = this.readCapture(captureId)
+    if (!capture || capture.deletedAt) return false
+    if (capture.ai !== 'queued') await this.requeue(capture, requestBatch())
+    return true
+  }
+
+  /**
+   * Requeues a capture whose extraction failed. A note with nothing automatic to find must have
+   * failed on a request from its menu, so it is retried as one. Returns false when there is nothing to retry.
+   */
   async retryAi(captureId: string): Promise<boolean> {
     const capture = this.readCapture(captureId)
-    if (!capture || capture.deletedAt || capture.ai !== 'failed' || !requestsTaskGeneration(capture.text)) return false
-    const seq = this.latestSeq() + 1
-    this.write({ type: 'capture', value: { ...capture, ai: 'queued' } }, seq)
-    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue VALUES (?, 0, ?)', captureId, Date.now())
-    await this.ctx.storage.setAlarm(Date.now())
-    this.broadcast(seq)
+    if (!capture || capture.deletedAt || capture.ai !== 'failed') return false
+    await this.requeue(capture, automaticGeneration(capture) ? null : requestBatch())
     return true
   }
 
@@ -114,7 +135,7 @@ export class TaskSpace extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     const jobs = this.ctx.storage.sql
-      .exec<QueueRow>('SELECT capture_id, attempts FROM ai_queue WHERE run_at <= ? ORDER BY run_at LIMIT ?', Date.now(), AI_BATCH)
+      .exec<QueueRow>('SELECT capture_id, attempts, batch FROM ai_queue WHERE run_at <= ? ORDER BY run_at LIMIT ?', Date.now(), AI_BATCH)
       .toArray()
     for (const job of jobs) await this.runExtraction(job)
     const next = this.ctx.storage.sql.exec<{ run_at: number | null }>('SELECT MIN(run_at) AS run_at FROM ai_queue').one().run_at
@@ -127,22 +148,28 @@ export class TaskSpace extends DurableObject<Env> {
       this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
       return
     }
-    let suggestions: Suggestion[]
-    try {
-      suggestions = await extractSuggestions(this.env, capture)
-    } catch (error) {
-      this.recordFailure(job, error)
-      return
+    // Jobs queued before typed notes stopped generating automatically find nothing.
+    const mode = job.batch ? 'create' : automaticGeneration(capture)
+    let suggestions: Suggestion[] = []
+    if (mode) {
+      try {
+        suggestions = await extractSuggestions(this.env, capture, mode)
+      } catch (error) {
+        this.recordFailure(job, error)
+        return
+      }
     }
     // Other requests may run during the AI call; re-read so a deletion is respected.
     const latest = this.readCapture(capture.id)
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', capture.id)
     if (!latest || latest.deletedAt) return
     let seq = this.latestSeq()
-    suggestions.forEach((suggestion, index) => {
-      const task = suggestionTask(latest, suggestion, index)
-      if (!this.read('task', task.id)) this.write({ type: 'task', value: task }, ++seq)
-    })
+    if (mode) {
+      suggestions.forEach((suggestion, index) => {
+        const task = suggestionTask(latest, suggestion, job.batch ?? AUTOMATIC_BATCH, index, mode)
+        if (!this.read('task', task.id)) this.write({ type: 'task', value: task }, ++seq)
+      })
+    }
     this.write({ type: 'capture', value: { ...latest, ai: 'ready' } }, ++seq)
     this.broadcast(seq)
   }
@@ -163,6 +190,19 @@ export class TaskSpace extends DurableObject<Env> {
     const seq = this.latestSeq() + 1
     this.write({ type: 'capture', value: { ...latest, ai: 'failed' } }, seq)
     this.broadcast(seq)
+  }
+
+  /** Marks a capture queued, on every device, and schedules its extraction. */
+  private async requeue(capture: Capture, batch: string | null): Promise<void> {
+    const seq = this.latestSeq() + 1
+    this.write({ type: 'capture', value: { ...capture, ai: 'queued' } }, seq)
+    this.enqueue(capture.id, batch)
+    await this.ctx.storage.setAlarm(Date.now())
+    this.broadcast(seq)
+  }
+
+  private enqueue(captureId: string, batch: string | null): void {
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO ai_queue (capture_id, attempts, run_at, batch) VALUES (?, 0, ?, ?)', captureId, Date.now(), batch)
   }
 
   /** A child made on one device for a parent deleted on another is deleted too. */

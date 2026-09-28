@@ -6,7 +6,6 @@ import Notice from '../../components/app/Notice'
 import SettingsDialog from '../../components/app/SettingsDialog'
 import Tabs, { tabId } from '../../components/app/Tabs'
 import Toast from '../../components/app/Toast'
-import ViewNavigation from '../../components/app/ViewNavigation'
 import WorkspaceHeader, { type HeaderAction } from '../../components/app/WorkspaceHeader'
 import SignInScreen from '../../components/auth/SignInScreen'
 import ComingUp from '../../components/calendar/ComingUp'
@@ -55,7 +54,7 @@ export default function TaskSetScreen() {
 
   const toggleTask = (task: Task) => void data.toggleTask(task)
   const editTask = (task: Task) => ui.setEditor({ captureId: task.captureId, task })
-  const openSettings = () => ui.setSettingsOpen(true)
+  const openSettings = ui.openSettings
   const install = () => void installer.install()
   const confirmDeleteTask = (task: Task) =>
     ui.setConfirmation({
@@ -76,10 +75,17 @@ export default function TaskSetScreen() {
     })
   }
   const actions: CaptureActions = {
+    onCopy: (capture) => void data.copyCapture(capture),
+    onGenerateTasks: (capture) => void data.generateTasks(capture),
     onCreateTask: (capture) => ui.setEditor({ captureId: capture.id }),
     onDelete: (capture) => confirmDeleteCaptures([capture]),
+    onRetry: (capture) => void data.retrySuggestions(capture),
+    onAcceptSuggestion: (task) => void data.reviewSuggestion(task, 'accept'),
+    onEditTask: editTask,
+    onDismissSuggestion: (task) => void data.reviewSuggestion(task, 'dismiss'),
     onToggleSelected: (capture) => ui.toggleSelected(capture.id),
   }
+  const counts = { ...ui.counts, github: github.activity?.pulls.length ?? 0 }
   const editor = ui.editor
   const openMeeting = ui.view === 'meetings' ? ui.meetings.meeting : null
   const headerAction: HeaderAction | undefined =
@@ -98,6 +104,7 @@ export default function TaskSetScreen() {
         return (
           <CaptureFeed
             days={ui.feed.days}
+            tasksByCapture={ui.feed.tasksByCapture}
             search={ui.search.trim()}
             selectedIds={ui.selecting ? ui.selectedIds : null}
             scrollRef={scrollRef}
@@ -114,9 +121,9 @@ export default function TaskSetScreen() {
                 suggestions={ui.suggestions}
                 generating={ui.generating}
                 onToggle={toggleTask} onEdit={editTask} onTogglePin={(task) => void data.togglePin(task)}
-                onAccept={(task) => void data.reviewSuggestion(task, 'accept')}
-                onDismiss={(task) => void data.reviewSuggestion(task, 'dismiss')}
-                onRetry={(capture) => void data.retrySuggestions(capture)}
+                onAccept={actions.onAcceptSuggestion}
+                onDismiss={actions.onDismissSuggestion}
+                onRetry={actions.onRetry}
               />
             ) : (
               <ArchiveList items={ui.archive} onRestore={toggleTask} onDelete={confirmDeleteTask} />
@@ -155,19 +162,23 @@ export default function TaskSetScreen() {
     <div className="app">
       <NavigationRail
         section={ui.section}
-        counts={{ ...ui.counts, github: github.activity?.pulls.length ?? 0 }}
+        counts={counts}
         status={data.sync.status}
+        open={ui.navigationOpen}
         onSelect={ui.selectView}
+        onClose={ui.closeNavigation}
         onOpenSettings={openSettings}
         onInstall={installer.status === 'available' ? install : undefined}
       />
-      <main className="workspace">
+      <main className="workspace" inert={ui.navigationOpen}>
         <WorkspaceHeader
           title={ui.title}
           detail={ui.detail}
           back={openMeeting ? { label: 'Meetings', onClick: ui.meetings.closeMeeting } : undefined}
           action={headerAction}
           status={data.sync.status}
+          navigationOpen={ui.navigationOpen}
+          navigationRef={ui.navigationRef}
           searchOpen={ui.searchOpen}
           search={ui.search}
           searchRef={ui.searchRef}
@@ -176,9 +187,8 @@ export default function TaskSetScreen() {
           onOpenSearch={ui.openSearch}
           onCloseSearch={ui.closeSearch}
           onToggleSelecting={ui.toggleSelecting}
-          onOpenSettings={openSettings}
+          onOpenNavigation={ui.openNavigation}
         />
-        <ViewNavigation section={ui.section} counts={{ ...ui.counts, github: github.activity?.pulls.length ?? 0 }} variant="tabs" onSelect={ui.selectView} />
         {ui.section === 'tasks' && (
           <Tabs label="Tasks" tabs={ui.taskTabs} selected={ui.view === 'archive' ? 'archive' : 'tasks'} panelId={TASKS_PANEL} onSelect={ui.selectView} />
         )}
@@ -190,7 +200,7 @@ export default function TaskSetScreen() {
           </div>
         </div>
         <div className="dock">
-          {data.archivedTask && (
+          {data.archivedTask ? (
             <Toast
               key={data.archivedTask.id}
               message={`“${data.archivedTask.title}” moved to Archive`}
@@ -198,6 +208,8 @@ export default function TaskSetScreen() {
               onAction={data.undoArchive}
               onDismiss={data.dismissArchived}
             />
+          ) : (
+            data.flash && <Toast message={data.flash} onDismiss={data.dismissFlash} />
           )}
           {ui.selecting && (
             <SelectionBar
@@ -245,7 +257,7 @@ export default function TaskSetScreen() {
           onInstall={install}
           onAppearanceChange={appearance.chooseAppearance}
           onSignOut={data.sync.signOut}
-          onClose={() => ui.setSettingsOpen(false)}
+          onClose={ui.closeSettings}
         />
       )}
       <div className="sr-only" role="status" aria-live="polite">

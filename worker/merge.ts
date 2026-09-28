@@ -1,7 +1,7 @@
 import type { MeetingNote } from '../src/shared/types/meeting'
 import type { SyncRecord } from '../src/shared/types/sync'
 import type { Capture, Task } from '../src/shared/types/task'
-import { requestsTaskGeneration } from '../src/shared/utils/capture'
+import { automaticGeneration, type GenerationMode } from '../src/shared/utils/capture'
 import type { Suggestion } from './validation'
 
 type Editable = { createdAt: string; updatedAt: string; deletedAt: string | null }
@@ -12,7 +12,7 @@ type RecordType = SyncRecord['type']
  * only accepted change to a stored capture is deletion. Returns null when nothing changes.
  */
 export function mergeCapture(existing: Capture | null, incoming: Capture): Capture | null {
-  if (!existing) return { ...incoming, ai: incoming.deletedAt ? null : requestsTaskGeneration(incoming.text) ? 'queued' : 'ready' }
+  if (!existing) return { ...incoming, ai: incoming.deletedAt ? null : automaticGeneration(incoming) ? 'queued' : 'ready' }
   if (existing.deletedAt || !incoming.deletedAt) return null
   return {
     ...existing,
@@ -96,20 +96,25 @@ export function deletedRecord(record: SyncRecord, at: string): SyncRecord {
   }
 }
 
+/** Automatic extraction always uses this id prefix, so a retry never duplicates a draft. */
+export const AUTOMATIC_BATCH = 's'
+
 /**
- * Suggestion ids are stable per capture so a retry never duplicates a draft. They carry the
- * capture's own timestamps, so any later edit from a device wins under `mergeTask`.
+ * A task found in a capture. `batch` prefixes its id: automatic extraction always uses
+ * `AUTOMATIC_BATCH`, and each request from a note's menu has its own, so ids stay stable across
+ * retries of one request. Tasks carry the capture's own timestamps, so any later edit from a device
+ * wins under `mergeTask`.
  */
-export function suggestionTask(capture: Capture, suggestion: Suggestion, index: number): Task {
+export function suggestionTask(capture: Capture, suggestion: Suggestion, batch: string, index: number, mode: GenerationMode): Task {
   return {
-    id: `${capture.id}:s${index}`,
+    id: `${capture.id}:${batch}${index}`,
     captureId: capture.id,
     title: suggestion.title,
     dueAt: suggestion.dueAt,
     reminderAt: suggestion.reminderAt,
     pinned: false,
     completedAt: null,
-    suggestionStatus: requestsTaskGeneration(capture.text) ? null : 'suggested',
+    suggestionStatus: mode === 'create' ? null : 'suggested',
     createdAt: capture.createdAt,
     updatedAt: capture.createdAt,
     deletedAt: null,

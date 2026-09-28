@@ -1,18 +1,23 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import type { Task } from '../../../shared/types/task'
 import type { CaptureDay } from '../../../shared/utils/taskView'
 import CaptureRow, { type CaptureActions } from '../CaptureRow'
 
 const STICK_DISTANCE = 160
+const NO_TASKS: Task[] = []
 
 /** Notes in the order they were written. Keeps the newest note in view unless the reader has scrolled back. */
 export default function CaptureFeed({
   days,
+  tasksByCapture,
   search,
   selectedIds,
   scrollRef,
   actions,
 }: {
   days: CaptureDay[]
+  /** Open tasks and suggestions, by the note they came from. */
+  tasksByCapture: ReadonlyMap<string, Task[]>
   search: string
   /** Null unless messages are being selected. */
   selectedIds: ReadonlySet<string> | null
@@ -22,8 +27,8 @@ export default function CaptureFeed({
   const endRef = useRef<HTMLDivElement>(null)
   const nearEnd = useRef(true)
   const last = days.at(-1)?.captures.at(-1)
-  // Task changes never alter or scroll the note.
-  const tailKey = last?.id ?? ''
+  // What the newest note shows under it can grow, so its AI state and task count keep it in view too.
+  const tailKey = last ? `${last.id}:${last.ai}:${tasksByCapture.get(last.id)?.length ?? 0}` : ''
 
   useEffect(() => {
     const container = scrollRef.current
@@ -47,7 +52,7 @@ export default function CaptureFeed({
         <p>
           {search
             ? 'Try another word from a note or task.'
-            : 'Write a note below, or hold the microphone and talk. Notes stay as written. Say “generate task” to create work, or use a note’s ⋯ menu.'}
+            : 'Write a note below, or switch to voice and hold to talk. Voice notes suggest tasks to add; for a typed note, choose Generate tasks from its ⋯ menu.'}
         </p>
       </div>
     )
@@ -62,6 +67,7 @@ export default function CaptureFeed({
             <CaptureRow
               key={capture.id}
               capture={capture}
+              tasks={tasksByCapture.get(capture.id) ?? NO_TASKS}
               selected={selectedIds ? selectedIds.has(capture.id) : null}
               actions={actions}
             />

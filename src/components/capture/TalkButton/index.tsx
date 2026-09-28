@@ -1,74 +1,89 @@
-import { LoaderCircle, Mic, Square } from 'lucide-react'
-import { useRef } from 'react'
+import { LoaderCircle } from 'lucide-react'
+import { useRef, type KeyboardEvent } from 'react'
 import type { DictationPhase } from '../../../shared/hooks/useDictation'
 
-/** Shorter presses count as a tap and keep listening hands-free until the next tap. */
-const TAP_MS = 300
+/** Sliding a finger this far above the bar while holding marks the recording for cancelling. */
+const CANCEL_DISTANCE = 48
+
+const isHoldKey = (event: KeyboardEvent) => event.key === ' ' || event.key === 'Enter'
 
 /**
- * Press and hold to talk; release to send. A quick tap starts hands-free listening instead.
- * With a keyboard, Space or Enter starts listening and pressing again sends.
+ * The voice composer's wide bar: hold to record, release to send, or slide up and release to
+ * cancel. With a keyboard, hold Space or Enter; Escape cancels.
  */
 export default function TalkButton({
   phase,
+  cancelling,
   onStart,
   onFinish,
-  onHandsFree,
+  onCancel,
+  onCancellingChange,
 }: {
   phase: DictationPhase
+  cancelling: boolean
   onStart: () => void
   onFinish: () => void
-  onHandsFree: () => void
+  onCancel: () => void
+  onCancellingChange: (cancelling: boolean) => void
 }) {
-  const pressedAt = useRef<number | null>(null)
+  const holding = useRef(false)
   const active = phase !== 'idle'
+
+  function press() {
+    holding.current = true
+    onCancellingChange(false)
+    onStart()
+  }
+
+  function release(send: boolean) {
+    if (!holding.current) return
+    holding.current = false
+    onCancellingChange(false)
+    if (send) onFinish()
+    else onCancel()
+  }
 
   return (
     <button
-      className={`talk-button${active ? ' is-active' : ''}`}
+      className={`talk-bar${active ? ' is-active' : ''}${cancelling ? ' is-cancelling' : ''}`}
       type="button"
-      aria-label={active ? 'Stop and send' : 'Hold to talk'}
-      aria-pressed={active}
       disabled={phase === 'transcribing'}
       onPointerDown={(event) => {
-        if (event.pointerType === 'mouse' && event.button !== 0) return
+        if ((event.pointerType === 'mouse' && event.button !== 0) || holding.current) return
         event.preventDefault()
         event.currentTarget.setPointerCapture(event.pointerId)
-        if (active) {
-          pressedAt.current = null
-          onFinish()
-          return
-        }
-        pressedAt.current = event.timeStamp
-        onStart()
+        press()
       }}
-      onPointerUp={(event) => {
-        if (pressedAt.current === null) return
-        const held = event.timeStamp - pressedAt.current
-        pressedAt.current = null
-        if (held < TAP_MS) onHandsFree()
-        else onFinish()
+      onPointerMove={(event) => {
+        if (holding.current) onCancellingChange(event.clientY < event.currentTarget.getBoundingClientRect().top - CANCEL_DISTANCE)
       }}
-      onPointerCancel={() => {
-        if (pressedAt.current === null) return
-        pressedAt.current = null
-        onFinish()
-      }}
+      onPointerUp={() => release(!cancelling)}
+      // The system took the touch, for example for a call or a permission prompt: never send half a message.
+      onPointerCancel={() => release(false)}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={(event) => {
-        if ((event.key !== 'Enter' && event.key !== ' ') || event.repeat) return
+        if (event.key === 'Escape') return release(false)
+        if (!isHoldKey(event)) return
         event.preventDefault()
-        if (active) return onFinish()
-        onStart()
-        onHandsFree()
+        if (!event.repeat && !holding.current) press()
       }}
+      onKeyUp={(event) => {
+        if (!isHoldKey(event)) return
+        event.preventDefault()
+        release(true)
+      }}
+      onBlur={() => release(false)}
     >
       {phase === 'transcribing' ? (
-        <LoaderCircle className="spin" size={20} aria-hidden="true" />
-      ) : active ? (
-        <Square size={14} fill="currentColor" aria-hidden="true" />
+        <>
+          <LoaderCircle className="spin" size={18} aria-hidden="true" /> Transcribing…
+        </>
+      ) : !active ? (
+        'Hold to talk'
+      ) : cancelling ? (
+        'Release to cancel'
       ) : (
-        <Mic size={20} aria-hidden="true" />
+        'Release to send'
       )}
     </button>
   )

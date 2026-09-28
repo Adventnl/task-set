@@ -1,17 +1,29 @@
-import { Check, Ellipsis, Mic, Plus, Trash2 } from 'lucide-react'
+import { Check, Copy, Ellipsis, ListTodo, Mic, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { Capture } from '../../../shared/types/task'
-import { timeLabel } from '../../../shared/utils/taskView'
+import type { Capture, Task } from '../../../shared/types/task'
+import { plural, timeLabel } from '../../../shared/utils/taskView'
+import CaptureTasks from '../CaptureTasks'
 
 export interface CaptureActions {
+  onCopy: (capture: Capture) => void
+  onGenerateTasks: (capture: Capture) => void
   onCreateTask: (capture: Capture) => void
   onDelete: (capture: Capture) => void
+  onRetry: (capture: Capture) => void
+  onAcceptSuggestion: (task: Task) => void
+  onEditTask: (task: Task) => void
+  onDismissSuggestion: (task: Task) => void
   onToggleSelected: (capture: Capture) => void
 }
 
-/** Original words only. Hold a note or use its adjacent actions button. */
-export default function CaptureRow({ capture, selected, actions }: {
+/**
+ * Original words, how many open tasks came from them, and any suggestions still to review. Hold a
+ * note, right-click it, or use its adjacent actions button for Copy, Generate tasks, Make task, and Delete.
+ */
+export default function CaptureRow({ capture, tasks, selected, actions }: {
   capture: Capture
+  /** Open tasks and suggestions made from this note. */
+  tasks: Task[]
   selected: boolean | null
   actions: CaptureActions
 }) {
@@ -21,6 +33,8 @@ export default function CaptureRow({ capture, selected, actions }: {
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null)
   const origin = useRef({ x: 0, y: 0 })
   const selecting = selected !== null
+  const suggestions = tasks.filter((task) => task.suggestionStatus === 'suggested')
+  const taskCount = tasks.length - suggestions.length
   const menuId = `capture-actions-${capture.id}`
   const timeId = `capture-time-${capture.id}`
   const textId = `capture-text-${capture.id}`
@@ -28,6 +42,11 @@ export default function CaptureRow({ capture, selected, actions }: {
   function cancelHold() {
     if (hold.current) clearTimeout(hold.current)
     hold.current = null
+  }
+
+  function choose(action: (capture: Capture) => void) {
+    setOpen(false)
+    action(capture)
   }
 
   useEffect(() => cancelHold, [])
@@ -81,6 +100,17 @@ export default function CaptureRow({ capture, selected, actions }: {
         <div className="capture-head">
           <time id={timeId} dateTime={capture.createdAt}>{timeLabel(capture.createdAt)}</time>
           {capture.kind === 'voice' && <span className="capture-kind"><Mic size={12} aria-hidden="true" /> Voice</span>}
+          {taskCount > 0 && <span className="capture-kind"><ListTodo size={12} aria-hidden="true" /> {plural(taskCount, 'task')}</span>}
+        </div>
+        <div inert={selecting}>
+          <CaptureTasks
+            capture={capture}
+            suggestions={suggestions}
+            onRetry={actions.onRetry}
+            onAccept={actions.onAcceptSuggestion}
+            onEdit={actions.onEditTask}
+            onDismiss={actions.onDismissSuggestion}
+          />
         </div>
       </div>
       {!selecting && (
@@ -90,10 +120,16 @@ export default function CaptureRow({ capture, selected, actions }: {
           </button>
           {open && (
             <div className="capture-actions" id={menuId} role="group" aria-label="Note actions">
-              <button className="button button-quiet" type="button" autoFocus onClick={() => { setOpen(false); actions.onCreateTask(capture) }}>
+              <button className="button button-quiet" type="button" autoFocus onClick={() => choose(actions.onCopy)}>
+                <Copy size={15} aria-hidden="true" /> Copy
+              </button>
+              <button className="button button-quiet" type="button" disabled={capture.ai === 'queued'} onClick={() => choose(actions.onGenerateTasks)}>
+                <Sparkles size={15} aria-hidden="true" /> {capture.ai === 'queued' ? 'Finding tasks…' : 'Generate tasks'}
+              </button>
+              <button className="button button-quiet" type="button" onClick={() => choose(actions.onCreateTask)}>
                 <Plus size={15} aria-hidden="true" /> Make task
               </button>
-              <button className="button button-quiet button-danger-text" type="button" onClick={() => { setOpen(false); actions.onDelete(capture) }}>
+              <button className="button button-quiet button-danger-text" type="button" onClick={() => choose(actions.onDelete)}>
                 <Trash2 size={15} aria-hidden="true" /> Delete
               </button>
             </div>

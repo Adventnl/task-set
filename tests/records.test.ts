@@ -3,7 +3,7 @@ import type { CalendarEvent } from '../src/shared/types/calendar'
 import type { Meeting, MeetingNote } from '../src/shared/types/meeting'
 import type { Capture, Task } from '../src/shared/types/task'
 import { EMPTY_WORKSPACE, mergeRecords, parseCapture, parseEvent, parseMeeting, parseMeetingNote, parseSyncRecord, parseTask } from '../src/shared/utils/records'
-import { deletedRecord, mergeCapture, mergeRecord, mergeTask, parentOf, suggestionTask } from '../worker/merge'
+import { AUTOMATIC_BATCH, deletedRecord, mergeCapture, mergeRecord, mergeTask, parentOf, suggestionTask } from '../worker/merge'
 
 const capture: Capture = {
   id: 'c1',
@@ -120,19 +120,21 @@ describe('record validation', () => {
 })
 
 describe('server merge rules', () => {
-  it('queues only an explicit task command and never changes its text afterwards', () => {
-    const stored = mergeCapture(null, capture)
+  it('queues voice notes and explicit commands, and never changes a note’s text afterwards', () => {
+    const typed = { ...capture, kind: 'text' as const }
+    const stored = mergeCapture(null, typed)
     expect(stored?.ai).toBe('ready')
-    expect(mergeCapture(stored, { ...capture, text: 'Rewritten' })).toBeNull()
-    expect(mergeCapture(null, { ...capture, text: 'Generate task: Email Sam' })?.ai).toBe('queued')
-    expect(mergeCapture(null, { ...capture, text: 'Email Sam', ai: 'queued' })?.ai).toBe('ready')
+    expect(mergeCapture(stored, { ...typed, text: 'Rewritten' })).toBeNull()
+    expect(mergeCapture(null, { ...typed, text: 'Generate task: Email Sam' })?.ai).toBe('queued')
+    expect(mergeCapture(null, { ...typed, text: 'Email Sam', ai: 'queued' })?.ai).toBe('ready')
+    expect(mergeCapture(null, capture)?.ai).toBe('queued')
   })
 
   it('accepts deletion of a capture once', () => {
     const stored = mergeCapture(null, capture)
     const deleted = mergeCapture(stored, { ...capture, deletedAt: '2026-09-26T00:00:00.000Z', updatedAt: '2026-09-26T00:00:00.000Z' })
     expect(deleted?.deletedAt).toBe('2026-09-26T00:00:00.000Z')
-    expect(deleted?.ai).toBe('ready')
+    expect(deleted?.ai).toBe('queued')
     expect(mergeCapture(deleted, { ...capture, deletedAt: '2026-09-27T00:00:00.000Z' })).toBeNull()
   })
 
@@ -173,16 +175,19 @@ describe('server merge rules', () => {
   })
 
   it('gives suggestions stable ids that any later edit overrides', () => {
-    const draft = suggestionTask(capture, { title: 'Change the Cloudflare email', dueAt: null, reminderAt: null }, 0)
-    expect(draft.id).toBe('c1:s0')
+    const draft = suggestionTask(capture, { title: 'Change the Cloudflare email', dueAt: null, reminderAt: null }, AUTOMATIC_BATCH, 0, 'suggest')
+    expect(draft).toMatchObject({ id: 'c1:s0', suggestionStatus: 'suggested' })
     expect(parseTask(draft)).toEqual(draft)
     const accepted = { ...draft, suggestionStatus: null, updatedAt: '2026-09-25T22:00:05.000Z' }
     expect(mergeTask(draft, accepted)?.suggestionStatus).toBeNull()
   })
 
-  it('puts explicitly generated tasks directly in Tasks with stable ids', () => {
-    const generated = suggestionTask({ ...capture, text: 'Generate task: Email Sam' }, { title: 'Email Sam', dueAt: null, reminderAt: null }, 0)
+  it('puts requested tasks directly in Tasks, with ids per request', () => {
+    const generated = suggestionTask({ ...capture, text: 'Generate task: Email Sam' }, { title: 'Email Sam', dueAt: null, reminderAt: null }, AUTOMATIC_BATCH, 0, 'create')
     expect(generated).toMatchObject({ id: 'c1:s0', captureId: 'c1', suggestionStatus: null })
     expect(parseTask(generated)).toEqual(generated)
+    const requested = suggestionTask(capture, { title: 'Email Sam', dueAt: null, reminderAt: null }, 'gmg0abcd-', 1, 'create')
+    expect(requested).toMatchObject({ id: 'c1:gmg0abcd-1', suggestionStatus: null })
+    expect(parseTask(requested)).toEqual(requested)
   })
 })
