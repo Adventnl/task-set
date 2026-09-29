@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import type { CalendarEvent, EventInput } from '../../../shared/types/calendar'
 import { isDateKey } from '../../../shared/utils/dates'
-import { MAX_CAPTURE_LENGTH } from '../../../shared/utils/records'
+import { RecordTooLargeError } from '../../../shared/utils/records'
 import Modal from '../../app/Modal'
 
 /** Corrects an event's words or moves it to another day. */
@@ -31,8 +31,8 @@ export default function EventEditor({
     try {
       await onSave({ date, text: text.trim() })
       onClose()
-    } catch {
-      setError('Could not save on this device. Try again.')
+    } catch (failure) {
+      setError(failure instanceof RecordTooLargeError ? failure.message : 'Could not save on this device. Try again.')
       setBusy(false)
     }
   }
@@ -57,7 +57,6 @@ export default function EventEditor({
           rows={3}
           value={text}
           onChange={(change) => setText(change.target.value)}
-          maxLength={MAX_CAPTURE_LENGTH}
           autoFocus
           required
         />

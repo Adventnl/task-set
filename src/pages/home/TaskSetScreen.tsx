@@ -194,12 +194,11 @@ export default function TaskSetScreen() {
         )}
         {upcoming.length > 0 && <ComingUp items={upcoming} onOpen={ui.openCalendarDay} />}
         <div className="workspace-scroll" ref={scrollRef}>
-          <div className="column">
-            {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
-            {!data.loading && content()}
-          </div>
+          <div className="column">{!data.loading && content()}</div>
         </div>
         <div className="dock">
+          {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
+          {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedTask ? (
             <Toast
               key={data.archivedTask.id}

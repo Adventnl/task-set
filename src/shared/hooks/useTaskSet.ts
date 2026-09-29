@@ -3,7 +3,7 @@ import { loadData } from '../../services/localDataService'
 import * as workspace from '../../services/workspaceService'
 import type { SyncRecord, WorkspaceData } from '../types/sync'
 import type { Capture, Editor, Task, TaskInput } from '../types/task'
-import { EMPTY_WORKSPACE, mergeRecords } from '../utils/records'
+import { EMPTY_WORKSPACE, mergeRecords, RecordTooLargeError } from '../utils/records'
 import { useSync } from './useSync'
 
 /** How long Undo stays offered after a task moves to the Archive. */
@@ -86,8 +86,9 @@ export function useTaskSet() {
         setAnnouncement(done)
         void requestSync()
         return true
-      } catch {
-        setNotice(failure)
+      } catch (error) {
+        // Trying again cannot help with a note that is too large, so say what does.
+        setNotice(error instanceof RecordTooLargeError ? error.message : failure)
         return false
       } finally {
         busyIds.current.delete(key)

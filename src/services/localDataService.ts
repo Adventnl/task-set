@@ -2,7 +2,7 @@ import type { CalendarEvent } from '../shared/types/calendar'
 import type { Meeting, MeetingNote } from '../shared/types/meeting'
 import type { SyncRecord, WorkspaceData } from '../shared/types/sync'
 import type { Capture, Task } from '../shared/types/task'
-import { byCreatedAt, recordKey } from '../shared/utils/records'
+import { byCreatedAt, fitsInStorage, RecordTooLargeError, recordKey } from '../shared/utils/records'
 
 const DATABASE_NAME = 'task-set'
 const DATABASE_VERSION = 3
@@ -132,9 +132,11 @@ export async function loadData(): Promise<WorkspaceData> {
 
 /**
  * Saves local edits and queues them for sync in one transaction, so neither can happen alone.
- * Returns the records, so an operation can save and hand them on in one step.
+ * Returns the records, so an operation can save and hand them on in one step. Throws
+ * `RecordTooLargeError`, saving nothing, when a record is too large for the server to store.
  */
 export async function saveLocal(records: SyncRecord[]): Promise<SyncRecord[]> {
+  if (!records.every(fitsInStorage)) throw new RecordTooLargeError()
   const database = await openDatabase()
   const transaction = database.transaction([...RECORD_STORES, OUTBOX], 'readwrite')
   for (const record of records) {

@@ -1,7 +1,6 @@
 import { ArrowUp, Keyboard, Mic } from 'lucide-react'
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
 import type { useDictation } from '../../../shared/hooks/useDictation'
-import { MAX_CAPTURE_LENGTH } from '../../../shared/utils/records'
 import TalkButton from '../TalkButton'
 
 const MAX_INPUT_HEIGHT = 200
@@ -128,7 +127,6 @@ export default function Composer({
               }}
               placeholder={placeholder}
               aria-label={label}
-              maxLength={MAX_CAPTURE_LENGTH}
               enterKeyHint="send"
             />
             {draft.trim() && (

@@ -2,11 +2,14 @@ import { DurableObject } from 'cloudflare:workers'
 import type { LiveMessage, PullResponse, SyncRecord } from '../src/shared/types/sync'
 import type { Capture } from '../src/shared/types/task'
 import { automaticGeneration } from '../src/shared/utils/capture'
+import { MAX_RECORD_BYTES, takeWithinBytes } from '../src/shared/utils/records'
 import { extractSuggestions } from './extraction'
 import { AUTOMATIC_BATCH, CHILD_TYPE, deletedRecord, mergeRecord, parentOf, suggestionTask } from './merge'
 import type { Suggestion } from './validation'
 
 const PAGE_SIZE = 500
+/** A pull page also ends once its records pass this size, so a few large notes never make one response huge. */
+const PAGE_BYTES = MAX_RECORD_BYTES
 const AI_BATCH = 5
 const MAX_AI_ATTEMPTS = 3
 const AI_RETRY_BASE_MS = 15_000
@@ -65,14 +68,13 @@ export class TaskSpace extends DurableObject<Env> {
     const latest = this.latestSeq()
     // A cursor ahead of the server means storage was reset: send everything again.
     const from = since > latest ? 0 : since
-    const rows = this.ctx.storage.sql
-      .exec<RecordRow>('SELECT type, body, seq FROM records WHERE seq > ? ORDER BY seq LIMIT ?', from, PAGE_SIZE + 1)
-      .toArray()
-    const page = rows.slice(0, PAGE_SIZE)
+    // The cursor reads rows as they are taken, so a page never loads more than it sends.
+    const rows = this.ctx.storage.sql.exec<RecordRow>('SELECT type, body, seq FROM records WHERE seq > ? ORDER BY seq', from)
+    const { taken: page, more } = takeWithinBytes(rows, (row) => row.body.length, PAGE_BYTES, PAGE_SIZE)
     return {
       records: page.map((row) => ({ type: row.type, value: JSON.parse(row.body) }) as SyncRecord),
       cursor: page.at(-1)?.seq ?? latest,
-      more: rows.length > PAGE_SIZE,
+      more,
     }
   }
 
