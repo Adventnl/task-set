@@ -1,9 +1,7 @@
 import { ArrowUp, Keyboard, Mic } from 'lucide-react'
-import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { useDictation } from '../../../shared/hooks/useDictation'
 import TalkButton from '../TalkButton'
-
-const MAX_INPUT_HEIGHT = 200
 
 type Phase = ReturnType<typeof useDictation>['phase']
 type Mode = 'keyboard' | 'voice'
@@ -46,19 +44,27 @@ export default function Composer({
   const [draft, setDraft] = useState('')
   const [mode, setMode] = useState<Mode>('keyboard')
   const [cancelling, setCancelling] = useState(false)
+  const transcriptRef = useRef<HTMLParagraphElement>(null)
   const talking = dictation.phase !== 'idle'
-  const { cancel } = dictation
+  const { cancel, transcript } = dictation
 
   useEffect(() => {
     if (hidden) cancel()
   }, [hidden, cancel])
 
+  // The box grows with the words; its stylesheet `max-height` is the one limit, after which it scrolls.
   useLayoutEffect(() => {
     const input = inputRef.current
     if (!input) return
     input.style.height = 'auto'
-    input.style.height = `${Math.min(input.scrollHeight, MAX_INPUT_HEIGHT)}px`
+    input.style.height = `${input.scrollHeight}px`
   }, [draft, mode, inputRef])
+
+  // A long dictation scrolls inside its panel; keep the words just spoken in view.
+  useLayoutEffect(() => {
+    const words = transcriptRef.current
+    if (words) words.scrollTop = words.scrollHeight
+  }, [transcript])
 
   async function send() {
     const text = draft.trim()
@@ -78,8 +84,8 @@ export default function Composer({
     <div className="composer-dock" hidden={hidden}>
       {talking && (
         <div className={`recording${cancelling ? ' is-cancelling' : ''}`}>
-          <p className="recording-text" aria-live="polite">
-            {dictation.transcript || <span className="recording-placeholder">{placeholders[dictation.phase]}</span>}
+          <p ref={transcriptRef} className="recording-text" aria-live="polite">
+            {transcript || <span className="recording-placeholder">{placeholders[dictation.phase]}</span>}
           </p>
           <p className="recording-hint">{recordingHint(dictation.phase, cancelling)}</p>
         </div>

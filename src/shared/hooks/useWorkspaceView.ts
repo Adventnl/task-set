@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { NARROW_SCREEN_QUERY, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
 import type { WorkspaceData } from '../types/sync'
 import type { ComposerTarget, Editor, View } from '../types/task'
@@ -42,6 +42,7 @@ export function useWorkspaceView(data: WorkspaceData) {
   const navigationRef = useRef<HTMLButtonElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   // Changes only when the date does, so day labels, countdowns, and the Archive roll over after midnight.
   const [today, setToday] = useState(() => dateKey(new Date()))
   const calendar = useCalendarView(data, today)
@@ -151,6 +152,12 @@ export function useWorkspaceView(data: WorkspaceData) {
   }
   const shownMeeting = view === 'meetings' ? meetings.meeting : null
 
+  // All views share one scroller, so a new screen would open part-way down wherever the last one was
+  // scrolled. Each starts at its top; the Notes feed puts itself at its newest note instead.
+  useLayoutEffect(() => {
+    if (view !== 'feed') scrollRef.current?.scrollTo({ top: 0 })
+  }, [view, shownMeeting?.id])
+
   /** On the calendar the composer adds to the selected day; in a meeting, to the day on screen. */
   function composerFor() {
     if (view === 'calendar') {
@@ -231,6 +238,8 @@ export function useWorkspaceView(data: WorkspaceData) {
     setConfirmation,
     composerRef,
     searchRef,
+    /** The one scroller that holds every view. */
+    scrollRef,
     feed,
     sections,
     suggestions: tasks.filter((task) => task.suggestionStatus === 'suggested'),

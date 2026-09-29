@@ -1,5 +1,4 @@
 import { Pencil, Plus } from 'lucide-react'
-import { useRef } from 'react'
 import ConfirmDialog from '../../components/app/ConfirmDialog'
 import NavigationRail from '../../components/app/NavigationRail'
 import Notice from '../../components/app/Notice'
@@ -40,7 +39,6 @@ export default function TaskSetScreen() {
   const schedule = useSchedule(data)
   const ui = useWorkspaceView(data.workspace)
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
   const send = (text: string, kind: Capture['kind']) => {
@@ -107,7 +105,7 @@ export default function TaskSetScreen() {
             tasksByCapture={ui.feed.tasksByCapture}
             search={ui.search.trim()}
             selectedIds={ui.selecting ? ui.selectedIds : null}
-            scrollRef={scrollRef}
+            scrollRef={ui.scrollRef}
             actions={actions}
           />
         )
@@ -193,10 +191,11 @@ export default function TaskSetScreen() {
           <Tabs label="Tasks" tabs={ui.taskTabs} selected={ui.view === 'archive' ? 'archive' : 'tasks'} panelId={TASKS_PANEL} onSelect={ui.selectView} />
         )}
         {upcoming.length > 0 && <ComingUp items={upcoming} onOpen={ui.openCalendarDay} />}
-        <div className="workspace-scroll" ref={scrollRef}>
+        <div className="workspace-scroll" ref={ui.scrollRef}>
           <div className="column">{!data.loading && content()}</div>
         </div>
-        <div className="dock">
+        {/* GitHub has no composer; with nothing to float above it either, the dock would only reserve blank space. */}
+        <div className="dock" hidden={ui.view === 'github' && !data.notice && !data.archivedTask && !data.flash}>
           {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
           {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedTask ? (

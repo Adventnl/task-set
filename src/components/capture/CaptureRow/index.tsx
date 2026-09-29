@@ -102,7 +102,7 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
           {capture.kind === 'voice' && <span className="capture-kind"><Mic size={12} aria-hidden="true" /> Voice</span>}
           {taskCount > 0 && <span className="capture-kind"><ListTodo size={12} aria-hidden="true" /> {plural(taskCount, 'task')}</span>}
         </div>
-        <div inert={selecting}>
+        <div className="capture-extras" inert={selecting}>
           <CaptureTasks
             capture={capture}
             suggestions={suggestions}
@@ -119,20 +119,31 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
             <Ellipsis size={17} />
           </button>
           {open && (
-            <div className="capture-actions" id={menuId} role="group" aria-label="Note actions">
-              <button className="button button-quiet" type="button" autoFocus onClick={() => choose(actions.onCopy)}>
-                <Copy size={15} aria-hidden="true" /> Copy
-              </button>
-              <button className="button button-quiet" type="button" disabled={capture.ai === 'queued'} onClick={() => choose(actions.onGenerateTasks)}>
-                <Sparkles size={15} aria-hidden="true" /> {capture.ai === 'queued' ? 'Finding tasks…' : 'Generate tasks'}
-              </button>
-              <button className="button button-quiet" type="button" onClick={() => choose(actions.onCreateTask)}>
-                <Plus size={15} aria-hidden="true" /> Make task
-              </button>
-              <button className="button button-quiet button-danger-text" type="button" onClick={() => choose(actions.onDelete)}>
-                <Trash2 size={15} aria-hidden="true" /> Delete
-              </button>
-            </div>
+            <>
+              {/* Shown on phones and touch screens only: there the actions are a bottom sheet over a dimmed page. */}
+              <div
+                className="sheet-scrim"
+                onClick={() => {
+                  setOpen(false)
+                  more.current?.focus()
+                }}
+                aria-hidden="true"
+              />
+              <div className="capture-actions" id={menuId} role="group" aria-label="Note actions">
+                <button className="button button-quiet" type="button" autoFocus onClick={() => choose(actions.onCopy)}>
+                  <Copy size={15} aria-hidden="true" /> Copy
+                </button>
+                <button className="button button-quiet" type="button" disabled={capture.ai === 'queued'} onClick={() => choose(actions.onGenerateTasks)}>
+                  <Sparkles size={15} aria-hidden="true" /> {capture.ai === 'queued' ? 'Finding tasks…' : 'Generate tasks'}
+                </button>
+                <button className="button button-quiet" type="button" onClick={() => choose(actions.onCreateTask)}>
+                  <Plus size={15} aria-hidden="true" /> Make task
+                </button>
+                <button className="button button-quiet button-danger-text" type="button" onClick={() => choose(actions.onDelete)}>
+                  <Trash2 size={15} aria-hidden="true" /> Delete
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}
