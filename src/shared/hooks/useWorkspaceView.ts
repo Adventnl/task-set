@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NARROW_SCREEN_QUERY, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
+import { NARROW_SCREEN_QUERY, NOTE_TAB_LABELS, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
 import type { WorkspaceData } from '../types/sync'
 import type { ComposerTarget, Editor, View } from '../types/task'
 import { dateKey, longDayLabel, shortDayLabel } from '../utils/dates'
 import { scheduleLabel } from '../utils/meetingView'
 import { archivedTasks, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
+import { archivedCaptures, archivedTasks, isArchivedCapture, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 import { useCalendarView } from './useCalendarView'
 import { useMeetingsView } from './useMeetingsView'
 
@@ -45,6 +47,11 @@ export function useWorkspaceView(data: WorkspaceData) {
   // Changes only when the date does, so day labels, countdowns, and the Archive roll over after midnight.
   const [today, setToday] = useState(() => dateKey(new Date()))
   const calendar = useCalendarView(data, today)
+  const activeCaptures = useMemo(() => captures.filter((c) => !c.archivedAt && !c.deletedAt), [captures])
+  const archivedCaptureIds = useMemo(() => new Set(captures.filter(isArchivedCapture).map((c) => c.id)), [captures])
+  const activeTasks = useMemo(() => tasks.filter((task) => !archivedCaptureIds.has(task.captureId)), [tasks, archivedCaptureIds])
+  const calendarData = useMemo(() => ({ ...data, tasks: activeTasks }), [data, activeTasks])
+  const calendar = useCalendarView(calendarData, today)
   const meetings = useMeetingsView(data, today)
 
   useEffect(() => {
@@ -136,14 +143,20 @@ export function useWorkspaceView(data: WorkspaceData) {
   }, [searchOpen, selecting, navigationOpen])
 
   const feed = useMemo(() => selectCaptureData(captures, tasks, search), [captures, tasks, search, today])
+  const feed = useMemo(() => selectCaptureData(activeCaptures, activeTasks, search), [activeCaptures, activeTasks, search, today])
   // Only messages still on screen count, so a search or another device's deletion never widens a delete.
   const selectedCaptures = useMemo(() => feed.captures.filter((capture) => selectedIds.has(capture.id)), [feed, selectedIds])
   const allSelected = feed.captures.length > 0 && selectedCaptures.length === feed.captures.length
   const sections = useMemo(() => (view === 'tasks' ? taskSections(tasks) : []), [tasks, view])
   const archive = useMemo(() => archivedTasks(tasks), [tasks, today])
   const taskCount = useMemo(() => openTaskCount(tasks), [tasks])
+  const sections = useMemo(() => (view === 'tasks' ? taskSections(activeTasks) : []), [activeTasks, view])
+  const archive = useMemo(() => archivedTasks(activeTasks), [activeTasks, today])
+  const noteArchive = useMemo(() => archivedCaptures(captures, tasks), [captures, tasks, today])
+  const taskCount = useMemo(() => openTaskCount(activeTasks), [activeTasks])
   const counts: Record<Section, number> = {
     feed: captures.length,
+    feed: activeCaptures.length,
     tasks: taskCount,
     calendar: calendar.upcoming.length,
     meetings: data.meetings.length,
@@ -192,6 +205,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     selecting,
     /** Undefined when there is nothing to select. */
     toggleSelecting: selecting ? stopSelecting : view === 'feed' && captures.length ? startSelecting : undefined,
+    toggleSelecting: selecting ? stopSelecting : view === 'feed' && activeCaptures.length ? startSelecting : undefined,
     stopSelecting,
     toggleSelected,
     selectedIds,
@@ -203,11 +217,16 @@ export function useWorkspaceView(data: WorkspaceData) {
       ? scheduleLabel(shownMeeting, today)
       : viewDetail(view, {
           notes: captures.length,
+          notes: activeCaptures.length,
           openTasks: taskCount,
           matches: search.trim() ? feed.matchCount : null,
           upcoming: calendar.upcoming.length,
           meetings: data.meetings.length,
         }),
+    noteTabs: [
+      { id: 'feed' as const, label: NOTE_TAB_LABELS.feed, count: activeCaptures.length },
+      { id: 'noteArchive' as const, label: NOTE_TAB_LABELS.noteArchive, count: noteArchive.length },
+    ],
     taskTabs: [
       { id: 'tasks' as const, label: TASK_TAB_LABELS.tasks, count: taskCount },
       { id: 'archive' as const, label: TASK_TAB_LABELS.archive, count: archive.length },
@@ -235,7 +254,10 @@ export function useWorkspaceView(data: WorkspaceData) {
     sections,
     suggestions: tasks.filter((task) => task.suggestionStatus === 'suggested'),
     generating: captures.filter((capture) => capture.ai === 'queued' || capture.ai === 'failed'),
+    suggestions: activeTasks.filter((task) => task.suggestionStatus === 'suggested'),
+    generating: activeCaptures.filter((capture) => capture.ai === 'queued' || capture.ai === 'failed'),
     archive,
+    noteArchive,
     counts,
     calendar,
     meetings,

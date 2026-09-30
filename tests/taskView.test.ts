@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Capture, Task } from '../src/shared/types/task'
 import { archivedTasks, expiredTasks, openTaskCount, selectCaptureData, taskFromEditor, taskSections, viewDetail, whenLabel } from '../src/shared/utils/taskView'
+import { archivedCaptures, archivedTasks, expiredCaptures, expiredTasks, openTaskCount, selectCaptureData, taskFromEditor, taskSections, viewDetail, whenLabel } from '../src/shared/utils/taskView'
 
 const capture = (id: string, text: string, createdAt: string): Capture => ({
   id,
@@ -10,6 +11,7 @@ const capture = (id: string, text: string, createdAt: string): Capture => ({
   createdAt,
   updatedAt: createdAt,
   deletedAt: null,
+  archivedAt: null,
   ai: 'ready',
 })
 

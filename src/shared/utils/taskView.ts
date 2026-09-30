@@ -1,4 +1,5 @@
 import { ARCHIVE_DAYS } from '../config/archive'
+import { ARCHIVE_DAYS, NOTE_ARCHIVE_DAYS } from '../config/archive'
 import type { Capture, Editor, Task, TaskInput, View } from '../types/task'
 import { DAY_MS, dateKey, dayOffset } from './dates'
 
@@ -10,6 +11,14 @@ export interface TaskSection {
 
 export interface ArchivedTask {
   task: Task & { completedAt: string }
+  /** Whole days until it is deleted for good; at least 1. */
+  daysLeft: number
+}
+
+export interface ArchivedCapture {
+  capture: Capture & { archivedAt: string }
+  /** Tasks linked to this capture. */
+  tasks: Task[]
   /** Whole days until it is deleted for good; at least 1. */
   daysLeft: number
 }
@@ -122,6 +131,39 @@ export function expiredTasks(tasks: Task[], now = new Date()): Task[] {
   return tasks.filter((task) => isArchived(task) && archiveExpiry(task) <= now.getTime())
 }
 
+function noteArchiveExpiry(capture: Capture & { archivedAt: string }): number {
+  return Date.parse(capture.archivedAt) + NOTE_ARCHIVE_DAYS * DAY_MS
+}
+
+export function isArchivedCapture(capture: Capture): capture is Capture & { archivedAt: string } {
+  return typeof capture.archivedAt === 'string' && !capture.deletedAt
+}
+
+/** The Note Archive, most recently deleted first. Notes past their retention are left out. */
+export function archivedCaptures(captures: Capture[], tasks: Task[], now = new Date()): ArchivedCapture[] {
+  const tasksByCapture = new Map<string, Task[]>()
+  for (const task of tasks) {
+    if (task.deletedAt) continue
+    const list = tasksByCapture.get(task.captureId) ?? []
+    list.push(task)
+    tasksByCapture.set(task.captureId, list)
+  }
+  return captures
+    .filter(isArchivedCapture)
+    .map((capture) => ({
+      capture,
+      tasks: tasksByCapture.get(capture.id) ?? [],
+      daysLeft: Math.ceil((noteArchiveExpiry(capture) - now.getTime()) / DAY_MS),
+    }))
+    .filter((item) => item.daysLeft > 0)
+    .sort((a, b) => b.capture.archivedAt.localeCompare(a.capture.archivedAt))
+}
+
+/** Archived notes whose retention has ended and that should be deleted for good. */
+export function expiredCaptures(captures: Capture[], now = new Date()): Capture[] {
+  return captures.filter((capture) => isArchivedCapture(capture) && noteArchiveExpiry(capture) <= now.getTime())
+}
+
 export function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }
@@ -143,6 +185,8 @@ export function viewDetail(view: View, counts: ViewCounts): string {
       return 'Pull requests and branches across your repositories'
     case 'archive':
       return `Completed tasks stay here for ${ARCHIVE_DAYS} days`
+    case 'noteArchive':
+      return `Deleted notes stay here for ${NOTE_ARCHIVE_DAYS} days`
     case 'tasks':
       return counts.openTasks ? `${counts.openTasks} open` : 'Nothing open'
     case 'calendar':
@@ -157,9 +201,11 @@ export function viewDetail(view: View, counts: ViewCounts): string {
 
 /** Links open tasks and suggestions to captures, filters by search, and groups captures by day. */
 export function selectCaptureData(captures: Capture[], tasks: Task[], search: string) {
+  const activeCaptures = captures.filter((capture) => !capture.archivedAt && !capture.deletedAt)
   const tasksByCapture = new Map<string, Task[]>()
   for (const task of tasks) {
     if (task.suggestionStatus === 'dismissed' || task.completedAt) continue
+    if (task.suggestionStatus === 'dismissed' || task.completedAt || task.deletedAt) continue
     const linked = tasksByCapture.get(task.captureId) ?? []
     linked.push(task)
     tasksByCapture.set(task.captureId, linked)
@@ -167,11 +213,13 @@ export function selectCaptureData(captures: Capture[], tasks: Task[], search: st
   const term = search.trim().toLocaleLowerCase()
   const visibleCaptures = term
     ? captures.filter(
+    ? activeCaptures.filter(
         (capture) =>
           capture.text.toLocaleLowerCase().includes(term) ||
           tasksByCapture.get(capture.id)?.some((task) => task.title.toLocaleLowerCase().includes(term)),
       )
     : captures
+    : activeCaptures
   const days: CaptureDay[] = []
   for (const capture of visibleCaptures) {
     const key = dateKey(capture.createdAt)

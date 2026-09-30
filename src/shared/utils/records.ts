@@ -57,10 +57,13 @@ export function parseCapture(value: unknown): Capture | null {
   if (!isObject(value)) return null
   const base = parseBase(value)
   const { kind, text, timeZone, ai } = value
+  const archivedAt = isoOrNull(value.archivedAt ?? null)
   if (!base || (kind !== 'text' && kind !== 'voice')) return null
+  if (archivedAt === undefined) return null
   if (!isText(text, MAX_CAPTURE_LENGTH) || !isValidTimeZone(timeZone)) return null
   if (ai !== null && ai !== undefined && ai !== 'queued' && ai !== 'ready' && ai !== 'failed') return null
   return { ...base, kind, text, timeZone, ai: ai ?? null }
+  return { ...base, kind, text, timeZone, archivedAt, ai: ai ?? null }
 }
 
 export function parseTask(value: unknown): Task | null {

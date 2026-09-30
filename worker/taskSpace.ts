@@ -88,8 +88,12 @@ export class TaskSpace extends DurableObject<Env> {
       const next = this.withoutDeletedParent(merged)
       this.write(next, ++seq)
       if (next.type === 'capture' && next.value.ai === 'queued') {
+      if (next.type === 'capture' && next.value.ai === 'queued' && !next.value.archivedAt) {
         this.enqueue(next.value.id, null)
         queued = true
+      }
+      if (next.type === 'capture' && next.value.archivedAt) {
+        this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', next.value.id)
       }
       if (next.value.deletedAt) seq = this.deleteChildren(next, seq)
     }
@@ -106,6 +110,7 @@ export class TaskSpace extends DurableObject<Env> {
   async generateTasks(captureId: string): Promise<boolean> {
     const capture = this.readCapture(captureId)
     if (!capture || capture.deletedAt) return false
+    if (!capture || capture.deletedAt || capture.archivedAt) return false
     if (capture.ai !== 'queued') await this.requeue(capture, requestBatch())
     return true
   }
@@ -117,6 +122,7 @@ export class TaskSpace extends DurableObject<Env> {
   async retryAi(captureId: string): Promise<boolean> {
     const capture = this.readCapture(captureId)
     if (!capture || capture.deletedAt || capture.ai !== 'failed') return false
+    if (!capture || capture.deletedAt || capture.archivedAt || capture.ai !== 'failed') return false
     await this.requeue(capture, automaticGeneration(capture) ? null : requestBatch())
     return true
   }
@@ -145,6 +151,7 @@ export class TaskSpace extends DurableObject<Env> {
   private async runExtraction(job: QueueRow): Promise<void> {
     const capture = this.readCapture(job.capture_id)
     if (!capture || capture.deletedAt) {
+    if (!capture || capture.deletedAt || capture.archivedAt) {
       this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
       return
     }
@@ -160,9 +167,11 @@ export class TaskSpace extends DurableObject<Env> {
       }
     }
     // Other requests may run during the AI call; re-read so a deletion is respected.
+    // Other requests may run during the AI call; re-read so a deletion or archive is respected.
     const latest = this.readCapture(capture.id)
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', capture.id)
     if (!latest || latest.deletedAt) return
+    if (!latest || latest.deletedAt || latest.archivedAt) return
     let seq = this.latestSeq()
     if (mode) {
       suggestions.forEach((suggestion, index) => {
@@ -187,6 +196,7 @@ export class TaskSpace extends DurableObject<Env> {
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
     const latest = this.readCapture(job.capture_id)
     if (!latest || latest.deletedAt) return
+    if (!latest || latest.deletedAt || latest.archivedAt) return
     const seq = this.latestSeq() + 1
     this.write({ type: 'capture', value: { ...latest, ai: 'failed' } }, seq)
     this.broadcast(seq)

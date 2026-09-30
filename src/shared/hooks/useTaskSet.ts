@@ -21,6 +21,7 @@ export function useTaskSet() {
   const [notice, setNotice] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const [archivedId, setArchivedId] = useState<string | null>(null)
+  const [archivedCaptureIds, setArchivedCaptureIds] = useState<string[]>([])
   const [flash, setFlash] = useState('')
   const busyIds = useRef(new Set<string>())
   const purging = useRef(false)
@@ -48,27 +49,42 @@ export function useTaskSet() {
   }, [])
 
   // Archived tasks past their retention are deleted whenever the task list changes, including on start.
+  // Archived tasks and notes past their retention are deleted whenever lists change, including on start.
   useEffect(() => {
     if (loading || purging.current) return
     purging.current = true
     workspace
       .purgeExpiredTasks(data.tasks)
       .then((records) => {
+    Promise.all([
+      workspace.purgeExpiredTasks(data.tasks),
+      workspace.purgeExpiredCaptures(data.captures, data.tasks),
+    ])
+      .then(([taskRecords, captureRecords]) => {
+        const records = [...taskRecords, ...captureRecords]
         if (!records.length) return
         merge(records)
         void requestSync()
       })
       .catch((error: unknown) => console.error('Could not delete expired archived tasks.', error))
+      .catch((error: unknown) => console.error('Could not delete expired archived records.', error))
       .finally(() => {
         purging.current = false
       })
   }, [loading, data.tasks, merge, requestSync])
+  }, [loading, data.tasks, data.captures, merge, requestSync])
 
   useEffect(() => {
     if (!archivedId) return
     const timer = window.setTimeout(() => setArchivedId(null), UNDO_MS)
     return () => window.clearTimeout(timer)
   }, [archivedId])
+
+  useEffect(() => {
+    if (!archivedCaptureIds.length) return
+    const timer = window.setTimeout(() => setArchivedCaptureIds([]), UNDO_MS)
+    return () => window.clearTimeout(timer)
+  }, [archivedCaptureIds])
 
   useEffect(() => {
     if (!flash) return
@@ -110,6 +126,35 @@ export function useTaskSet() {
 
   const sendCapture = (text: string, kind: Capture['kind']) =>
     commit(`send:${text}`, () => workspace.createCapture(text, kind), 'Saved', 'Could not save that on this device. Your words are still in the box; try again.')
+
+  const archiveCaptures = async (captures: Capture[]) => {
+    const one = captures.length === 1
+    const saved = await commit(
+      `archive:${captures.map((capture) => capture.id).join(',')}`,
+      () => workspace.archiveCaptures(captures),
+      one ? 'Note moved to Archive' : `${captures.length} notes moved to Archive`,
+      `Could not move ${one ? 'that note' : 'those notes'} to Archive. Try again.`,
+    )
+    if (saved) setArchivedCaptureIds(captures.map((c) => c.id))
+    return saved
+  }
+
+  const restoreCaptures = (captures: Capture[]) => {
+    const one = captures.length === 1
+    return commit(
+      `restore:${captures.map((capture) => capture.id).join(',')}`,
+      () => workspace.restoreCaptures(captures),
+      one ? 'Note restored' : `${captures.length} notes restored`,
+      `Could not restore ${one ? 'that note' : 'those notes'}. Try again.`,
+    )
+  }
+
+  const undoArchiveCaptures = async () => {
+    if (!archivedCaptureIds.length) return
+    const toRestore = data.captures.filter((c) => archivedCaptureIds.includes(c.id) && c.archivedAt)
+    setArchivedCaptureIds([])
+    if (toRestore.length) await restoreCaptures(toRestore)
+  }
 
   const deleteCaptures = (captures: Capture[]) => {
     const one = captures.length === 1
@@ -196,7 +241,21 @@ export function useTaskSet() {
     commit,
     persist,
     sendCapture,
+    archiveCaptures,
+    restoreCaptures,
     deleteCaptures,
+    undoArchiveCaptures,
+    archivedNotesToast:
+      archivedCaptureIds.filter((id) => data.captures.some((c) => c.id === id && c.archivedAt)).length > 0
+        ? {
+            message:
+              archivedCaptureIds.filter((id) => data.captures.some((c) => c.id === id && c.archivedAt)).length === 1
+                ? 'Note moved to Archive'
+                : `${archivedCaptureIds.filter((id) => data.captures.some((c) => c.id === id && c.archivedAt)).length} notes moved to Archive`,
+            undo: undoArchiveCaptures,
+            dismiss: () => setArchivedCaptureIds([]),
+          }
+        : null,
     toggleTask,
     archivedTask,
     undoArchive: () => void (archivedTask && toggleTask(archivedTask)),

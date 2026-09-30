@@ -4,6 +4,7 @@ import type { SyncRecord } from '../shared/types/sync'
 import type { Capture, Editor, Task, TaskInput } from '../shared/types/task'
 import { markDeleted } from '../shared/utils/records'
 import { expiredTasks, taskFromEditor } from '../shared/utils/taskView'
+import { expiredCaptures, expiredTasks, taskFromEditor } from '../shared/utils/taskView'
 import { createId, saveLocal } from './localDataService'
 
 // Every operation saves on this device first and returns the changed records;
@@ -21,9 +22,32 @@ export function createCapture(text: string, kind: Capture['kind']): Promise<Sync
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
+    archivedAt: null,
     ai: null,
   }
   return saveLocal([{ type: 'capture', value }])
+}
+
+/** Moves captures to the Archive tab for 30 days. */
+export function archiveCaptures(captures: Capture[]): Promise<SyncRecord[]> {
+  const now = new Date().toISOString()
+  return saveLocal(
+    captures.map((capture): SyncRecord => ({
+      type: 'capture',
+      value: { ...capture, archivedAt: now, updatedAt: now },
+    })),
+  )
+}
+
+/** Restores captures from the Archive tab back to the active Notes feed. */
+export function restoreCaptures(captures: Capture[]): Promise<SyncRecord[]> {
+  const now = new Date().toISOString()
+  return saveLocal(
+    captures.map((capture): SyncRecord => ({
+      type: 'capture',
+      value: { ...capture, archivedAt: null, updatedAt: now },
+    })),
+  )
 }
 
 /** Deletes captures together with the tasks made from them, in one local save. */
@@ -34,6 +58,13 @@ export function deleteCaptures(captures: Capture[], tasks: Task[]): Promise<Sync
     ...captures.map((capture): SyncRecord => ({ type: 'capture', value: markDeleted(capture, now) })),
     ...tasks.filter((task) => ids.has(task.captureId)).map((task) => taskRecord(markDeleted(task, now))),
   ])
+}
+
+/** Deletes archived notes whose retention has ended. Saves nothing when none have. */
+export async function purgeExpiredCaptures(captures: Capture[], tasks: Task[], now = new Date()): Promise<SyncRecord[]> {
+  const expired = expiredCaptures(captures, now)
+  if (!expired.length) return []
+  return deleteCaptures(expired, tasks)
 }
 
 export function saveTask(editor: Editor, input: TaskInput): Promise<SyncRecord[]> {
