@@ -26,6 +26,7 @@ export default function CaptureFeed({
 }) {
   const endRef = useRef<HTMLDivElement>(null)
   const nearEnd = useRef(true)
+  const searching = useRef(false)
   const last = days.at(-1)?.captures.at(-1)
   // What the newest note shows under it can grow, so its AI state and task count keep it in view too.
   const tailKey = last ? `${last.id}:${last.ai}:${tasksByCapture.get(last.id)?.length ?? 0}` : ''
@@ -33,14 +34,28 @@ export default function CaptureFeed({
   useEffect(() => {
     const container = scrollRef.current
     if (!container) return
+    let height = container.clientHeight
     const onScroll = () => {
+      // The browser also scrolls when the container changes size, which is not the reader moving.
+      if (container.clientHeight !== height) return
       nearEnd.current = container.scrollHeight - container.scrollTop - container.clientHeight < STICK_DISTANCE
     }
     container.addEventListener('scroll', onScroll, { passive: true })
-    return () => container.removeEventListener('scroll', onScroll)
+    // The space above the keyboard changes as it opens and as the composer grows. Without this the
+    // newest note slides under them; a reader who was at the end stays at the end.
+    const resized = new ResizeObserver(() => {
+      height = container.clientHeight
+      if (nearEnd.current && !searching.current) container.scrollTop = container.scrollHeight
+    })
+    resized.observe(container)
+    return () => {
+      container.removeEventListener('scroll', onScroll)
+      resized.disconnect()
+    }
   }, [scrollRef])
 
   useLayoutEffect(() => {
+    searching.current = search !== ''
     // A note just written on this device (not yet synced) always scrolls into view.
     if (!search && (nearEnd.current || last?.ai === null)) endRef.current?.scrollIntoView({ block: 'end' })
   }, [tailKey, search])

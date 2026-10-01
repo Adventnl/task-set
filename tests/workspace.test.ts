@@ -1,7 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearLocalData, loadData, readOutbox, saveLocal } from '../src/services/localDataService'
-import { deleteCaptures, purgeExpiredTasks, saveTask, setTaskCompleted, setTaskPinned } from '../src/services/workspaceService'
 import { archiveCaptures, deleteCaptures, purgeExpiredCaptures, purgeExpiredTasks, restoreCaptures, saveTask, setTaskCompleted, setTaskPinned } from '../src/services/workspaceService'
 import type { SyncRecord } from '../src/shared/types/sync'
 import type { Capture, Task } from '../src/shared/types/task'

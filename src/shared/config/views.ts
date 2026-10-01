@@ -1,7 +1,5 @@
 import type { View } from '../types/task'
 
-/** The sidebar and phone navigation. The Archive is a tab of Tasks, so it is not a section of its own. */
-export type Section = Exclude<View, 'archive'>
 /** The sidebar and phone navigation. The Archive is a tab of Notes and Tasks, so it is not a section of its own. */
 export type Section = Exclude<View, 'archive' | 'noteArchive'>
 
@@ -27,7 +25,6 @@ export const NOTE_TAB_LABELS = { feed: 'Notes', noteArchive: 'Archive' } as cons
 export const TASK_TAB_LABELS = { tasks: 'Open', archive: 'Archive' } as const
 
 export function sectionOf(view: View): Section {
-  return view === 'archive' ? 'tasks' : view
   if (view === 'noteArchive') return 'feed'
   if (view === 'archive') return 'tasks'
   return view

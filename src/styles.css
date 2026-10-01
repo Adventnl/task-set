@@ -438,7 +438,8 @@ legend {
 
 .mobile-only,
 .rail-close,
-.rail-scrim {
+.rail-scrim,
+.sheet-scrim {
   display: none;
 }
 
@@ -623,7 +624,7 @@ legend {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
   padding-left: var(--space-4);
   border-radius: var(--radius-lg);
   background: var(--danger-soft);
@@ -1559,7 +1560,9 @@ legend {
 .composer textarea {
   min-width: 0;
   min-height: var(--touch);
+  /* Tall enough for a paragraph, but never most of a short screen: with the keyboard open, the notes stay in sight. */
   max-height: 200px;
+  max-height: min(200px, 30dvh);
   flex: 1;
   padding: 11px 0;
   border: 0;
@@ -2102,9 +2105,88 @@ textarea.text-field {
     box-shadow: 0 0 0 2px var(--canvas);
   }
 
-  /* Leaves room for the menu button, the title, and the select button beside it. */
-  .search-field {
-    width: min(240px, 100vw - 194px);
+  /* The title takes at most two lines, so a long meeting name cannot fill the screen. */
+  .workspace-title h1 {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* A page inside a view has a bar of its own: menu, back link, and actions on one row, with the title using the full width below. */
+  .workspace-header.has-back {
+    flex-wrap: wrap;
+  }
+
+  .workspace-header.has-back .workspace-title {
+    display: contents;
+  }
+
+  .workspace-header.has-back .back-link {
+    order: 1;
+    flex: 1;
+    justify-content: flex-start;
+    margin: 0;
+  }
+
+  .workspace-header.has-back .workspace-tools {
+    order: 2;
+  }
+
+  .workspace-header.has-back h1,
+  .workspace-header.has-back .workspace-title p {
+    order: 3;
+    flex: 0 0 100%;
+    margin-top: 0;
+  }
+
+  /* An open search takes the whole row, so the title is never squeezed beside it. */
+  .workspace-header.is-searching .workspace-title,
+  .workspace-header.is-searching .workspace-tools > :not(.search-field) {
+    display: none;
+  }
+
+  .workspace-header.is-searching .workspace-tools {
+    flex: 1;
+  }
+
+  .workspace-header.is-searching .search-field {
+    width: 100%;
+  }
+
+  /* The actions button sits on the time line, so a note's words use the full width instead of leaving a blank column beside them. */
+  .capture:not(.is-selectable) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 var(--space-2);
+  }
+
+  .capture:not(.is-selectable) .capture-main {
+    display: contents;
+  }
+
+  .capture:not(.is-selectable) .capture-text {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .capture:not(.is-selectable) .capture-head {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .capture:not(.is-selectable) .capture-extras {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  /* The button keeps its full touch size while the time line, not the button, sets the height of the row. */
+  .capture:not(.is-selectable) .capture-tools {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    margin: calc((var(--meta-row) - var(--touch)) / 2) calc(-1 * var(--space-3)) calc((var(--meta-row) - var(--touch)) / 2) 0;
   }
 
   .modal {
@@ -2168,6 +2250,41 @@ textarea.text-field {
   }
 }
 
+/*
+ * On phones, and on any touch screen however wide (a tablet, or a phone turned on its side), the note
+ * actions are a bottom sheet over a dimmed page. Beside their button they would be cut off by the
+ * scrolling page and would cover the note.
+ */
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .sheet-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    background: var(--backdrop);
+    animation: fade-in var(--medium) ease;
+    touch-action: none;
+  }
+
+  .capture-actions {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 31;
+    min-width: 0;
+    padding: var(--space-2) var(--space-3) max(var(--space-3), env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-dialog);
+    animation: toast-in var(--medium) var(--ease);
+  }
+
+  .capture-actions .button {
+    min-height: 52px;
+    padding: 0 var(--space-3);
+    font-size: var(--text-body);
+  }
+}
+
 /* The smallest phones keep labels readable by showing some actions as icons alone. */
 @media (max-width: 380px) {
   .selection-delete {
@@ -2188,6 +2305,21 @@ textarea.text-field {
   .calendar-bar .button {
     margin-right: 0;
     padding: 0 var(--space-2);
+  }
+}
+
+/*
+ * A short window, such as a phone with its keyboard open or turned on its side, gives the page to
+ * the notes: the next events and the line under the title step aside, and the header tightens.
+ */
+@media (max-height: 600px) {
+  .coming-up,
+  .workspace-title p {
+    display: none;
+  }
+
+  .workspace-header {
+    padding-block: max(var(--space-2), env(safe-area-inset-top)) var(--space-2);
   }
 }
 
@@ -2230,4 +2362,19 @@ textarea.text-field {
 .github-warnings { margin-top: var(--space-4); color: var(--danger); overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .github-row { align-items: flex-start; flex-direction: column; gap: var(--space-3); }
+}
+/* On phones the repositories flow with the page: a short scroll box inside a scrolling page traps a thumb. */
+@media (max-width: 760px) {
+  .github-repositories { max-height: none; overflow: visible; }
+}
+
+/* An archived note shows its first lines, not the whole text. */
+.note-archive-text {
+  display: -webkit-box;
+  overflow: hidden;
+  text-decoration: none;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
 }

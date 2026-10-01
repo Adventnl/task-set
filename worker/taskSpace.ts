@@ -2,11 +2,14 @@ import { DurableObject } from 'cloudflare:workers'
 import type { LiveMessage, PullResponse, SyncRecord } from '../src/shared/types/sync'
 import type { Capture } from '../src/shared/types/task'
 import { automaticGeneration } from '../src/shared/utils/capture'
+import { MAX_RECORD_BYTES, takeWithinBytes } from '../src/shared/utils/records'
 import { extractSuggestions } from './extraction'
 import { AUTOMATIC_BATCH, CHILD_TYPE, deletedRecord, mergeRecord, parentOf, suggestionTask } from './merge'
 import type { Suggestion } from './validation'
 
 const PAGE_SIZE = 500
+/** A pull page also ends once its records pass this size, so a few large notes never make one response huge. */
+const PAGE_BYTES = MAX_RECORD_BYTES
 const AI_BATCH = 5
 const MAX_AI_ATTEMPTS = 3
 const AI_RETRY_BASE_MS = 15_000
@@ -65,14 +68,13 @@ export class TaskSpace extends DurableObject<Env> {
     const latest = this.latestSeq()
     // A cursor ahead of the server means storage was reset: send everything again.
     const from = since > latest ? 0 : since
-    const rows = this.ctx.storage.sql
-      .exec<RecordRow>('SELECT type, body, seq FROM records WHERE seq > ? ORDER BY seq LIMIT ?', from, PAGE_SIZE + 1)
-      .toArray()
-    const page = rows.slice(0, PAGE_SIZE)
+    // The cursor reads rows as they are taken, so a page never loads more than it sends.
+    const rows = this.ctx.storage.sql.exec<RecordRow>('SELECT type, body, seq FROM records WHERE seq > ? ORDER BY seq', from)
+    const { taken: page, more } = takeWithinBytes(rows, (row) => row.body.length, PAGE_BYTES, PAGE_SIZE)
     return {
       records: page.map((row) => ({ type: row.type, value: JSON.parse(row.body) }) as SyncRecord),
       cursor: page.at(-1)?.seq ?? latest,
-      more: rows.length > PAGE_SIZE,
+      more,
     }
   }
 
@@ -87,7 +89,6 @@ export class TaskSpace extends DurableObject<Env> {
       if (!merged) continue
       const next = this.withoutDeletedParent(merged)
       this.write(next, ++seq)
-      if (next.type === 'capture' && next.value.ai === 'queued') {
       if (next.type === 'capture' && next.value.ai === 'queued' && !next.value.archivedAt) {
         this.enqueue(next.value.id, null)
         queued = true
@@ -109,7 +110,6 @@ export class TaskSpace extends DurableObject<Env> {
    */
   async generateTasks(captureId: string): Promise<boolean> {
     const capture = this.readCapture(captureId)
-    if (!capture || capture.deletedAt) return false
     if (!capture || capture.deletedAt || capture.archivedAt) return false
     if (capture.ai !== 'queued') await this.requeue(capture, requestBatch())
     return true
@@ -121,7 +121,6 @@ export class TaskSpace extends DurableObject<Env> {
    */
   async retryAi(captureId: string): Promise<boolean> {
     const capture = this.readCapture(captureId)
-    if (!capture || capture.deletedAt || capture.ai !== 'failed') return false
     if (!capture || capture.deletedAt || capture.archivedAt || capture.ai !== 'failed') return false
     await this.requeue(capture, automaticGeneration(capture) ? null : requestBatch())
     return true
@@ -150,7 +149,6 @@ export class TaskSpace extends DurableObject<Env> {
 
   private async runExtraction(job: QueueRow): Promise<void> {
     const capture = this.readCapture(job.capture_id)
-    if (!capture || capture.deletedAt) {
     if (!capture || capture.deletedAt || capture.archivedAt) {
       this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
       return
@@ -166,11 +164,9 @@ export class TaskSpace extends DurableObject<Env> {
         return
       }
     }
-    // Other requests may run during the AI call; re-read so a deletion is respected.
     // Other requests may run during the AI call; re-read so a deletion or archive is respected.
     const latest = this.readCapture(capture.id)
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', capture.id)
-    if (!latest || latest.deletedAt) return
     if (!latest || latest.deletedAt || latest.archivedAt) return
     let seq = this.latestSeq()
     if (mode) {
@@ -195,7 +191,6 @@ export class TaskSpace extends DurableObject<Env> {
     }
     this.ctx.storage.sql.exec('DELETE FROM ai_queue WHERE capture_id = ?', job.capture_id)
     const latest = this.readCapture(job.capture_id)
-    if (!latest || latest.deletedAt) return
     if (!latest || latest.deletedAt || latest.archivedAt) return
     const seq = this.latestSeq() + 1
     this.write({ type: 'capture', value: { ...latest, ai: 'failed' } }, seq)

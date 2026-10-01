@@ -1,5 +1,4 @@
 import { Pencil, Plus } from 'lucide-react'
-import { useRef } from 'react'
 import ConfirmDialog from '../../components/app/ConfirmDialog'
 import NavigationRail from '../../components/app/NavigationRail'
 import Notice from '../../components/app/Notice'
@@ -42,7 +41,6 @@ export default function TaskSetScreen() {
   const schedule = useSchedule(data)
   const ui = useWorkspaceView(data.workspace)
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
   const send = (text: string, kind: Capture['kind']) => {
@@ -65,18 +63,15 @@ export default function TaskSetScreen() {
       confirmLabel: 'Delete task',
       onConfirm: () => data.deleteTask(task),
     })
-  const confirmDeleteCaptures = (captures: Capture[]) => {
   const confirmArchiveCaptures = (captures: Capture[]) => {
     const one = captures.length === 1
     ui.setConfirmation({
       title: one ? 'Delete this note?' : `Delete ${captures.length} notes?`,
-      message: `Tasks made from ${one ? 'it' : 'them'} are deleted too, on every device.`,
       message: one
         ? 'It will stay in the Archive for 30 days before being deleted for good. Tasks made from it are archived too.'
         : `They will stay in the Archive for 30 days before being deleted for good. Tasks made from them are archived too.`,
       confirmLabel: one ? 'Delete note' : `Delete ${captures.length} notes`,
       onConfirm: async () => {
-        if (await data.deleteCaptures(captures)) ui.stopSelecting()
         if (await data.archiveCaptures(captures)) ui.stopSelecting()
       },
     })
@@ -93,7 +88,6 @@ export default function TaskSetScreen() {
     onCopy: (capture) => void data.copyCapture(capture),
     onGenerateTasks: (capture) => void data.generateTasks(capture),
     onCreateTask: (capture) => ui.setEditor({ captureId: capture.id }),
-    onDelete: (capture) => confirmDeleteCaptures([capture]),
     onDelete: (capture) => confirmArchiveCaptures([capture]),
     onRetry: (capture) => void data.retrySuggestions(capture),
     onAcceptSuggestion: (task) => void data.reviewSuggestion(task, 'accept'),
@@ -119,14 +113,6 @@ export default function TaskSetScreen() {
       case 'feed':
       case 'noteArchive':
         return (
-          <CaptureFeed
-            days={ui.feed.days}
-            tasksByCapture={ui.feed.tasksByCapture}
-            search={ui.search.trim()}
-            selectedIds={ui.selecting ? ui.selectedIds : null}
-            scrollRef={scrollRef}
-            actions={actions}
-          />
           <div role="tabpanel" id={NOTES_PANEL} aria-labelledby={tabId(ui.view)}>
             {ui.view === 'feed' ? (
               <CaptureFeed
@@ -134,7 +120,7 @@ export default function TaskSetScreen() {
                 tasksByCapture={ui.feed.tasksByCapture}
                 search={ui.search.trim()}
                 selectedIds={ui.selecting ? ui.selectedIds : null}
-                scrollRef={scrollRef}
+                scrollRef={ui.scrollRef}
                 actions={actions}
               />
             ) : (
@@ -231,14 +217,13 @@ export default function TaskSetScreen() {
           <Tabs label="Tasks" tabs={ui.taskTabs} selected={ui.view === 'archive' ? 'archive' : 'tasks'} panelId={TASKS_PANEL} onSelect={ui.selectView} />
         )}
         {upcoming.length > 0 && <ComingUp items={upcoming} onOpen={ui.openCalendarDay} />}
-        <div className="workspace-scroll" ref={scrollRef}>
-          <div className="column">
-            {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
-            {!data.loading && content()}
-          </div>
+        <div className="workspace-scroll" ref={ui.scrollRef}>
+          <div className="column">{!data.loading && content()}</div>
         </div>
-        <div className="dock">
-          {data.archivedTask ? (
+        {/* GitHub has no composer; with nothing to float above it either, the dock would only reserve blank space. */}
+        <div className="dock" hidden={ui.view === 'github' && !data.notice && !data.archivedTask && !data.flash}>
+          {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
+          {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedNotesToast ? (
             <Toast
               message={data.archivedNotesToast.message}
@@ -262,7 +247,6 @@ export default function TaskSetScreen() {
               count={ui.selectedCaptures.length}
               allSelected={ui.allSelected}
               onToggleAll={ui.toggleSelectAll}
-              onDelete={() => confirmDeleteCaptures(ui.selectedCaptures)}
               onDelete={() => confirmArchiveCaptures(ui.selectedCaptures)}
               onCancel={ui.stopSelecting}
             />

@@ -28,8 +28,6 @@ export interface Task {
   suggestionStatus: 'suggested' | 'dismissed' | null
 }
 
-/** `feed` is the Notes view; `archive` is the Tasks tab that holds completed tasks until they expire. */
-export type View = 'feed' | 'tasks' | 'archive' | 'calendar' | 'meetings' | 'github'
 /** `feed` is the Notes view; `noteArchive` is its Archive tab; `archive` is the Tasks tab that holds completed tasks until they expire. */
 export type View = 'feed' | 'noteArchive' | 'tasks' | 'archive' | 'calendar' | 'meetings' | 'github'
 /** Where the composer's words go: a new note, a calendar day, or a meeting day's notes. */

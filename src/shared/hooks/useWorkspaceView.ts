@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { NARROW_SCREEN_QUERY, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { NARROW_SCREEN_QUERY, NOTE_TAB_LABELS, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
 import type { WorkspaceData } from '../types/sync'
 import type { ComposerTarget, Editor, View } from '../types/task'
 import { dateKey, longDayLabel, shortDayLabel } from '../utils/dates'
 import { scheduleLabel } from '../utils/meetingView'
-import { archivedTasks, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 import { archivedCaptures, archivedTasks, isArchivedCapture, openTaskCount, selectCaptureData, taskSections, viewDetail } from '../utils/taskView'
 import { useCalendarView } from './useCalendarView'
 import { useMeetingsView } from './useMeetingsView'
@@ -44,9 +42,9 @@ export function useWorkspaceView(data: WorkspaceData) {
   const navigationRef = useRef<HTMLButtonElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   // Changes only when the date does, so day labels, countdowns, and the Archive roll over after midnight.
   const [today, setToday] = useState(() => dateKey(new Date()))
-  const calendar = useCalendarView(data, today)
   const activeCaptures = useMemo(() => captures.filter((c) => !c.archivedAt && !c.deletedAt), [captures])
   const archivedCaptureIds = useMemo(() => new Set(captures.filter(isArchivedCapture).map((c) => c.id)), [captures])
   const activeTasks = useMemo(() => tasks.filter((task) => !archivedCaptureIds.has(task.captureId)), [tasks, archivedCaptureIds])
@@ -142,20 +140,15 @@ export function useWorkspaceView(data: WorkspaceData) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [searchOpen, selecting, navigationOpen])
 
-  const feed = useMemo(() => selectCaptureData(captures, tasks, search), [captures, tasks, search, today])
   const feed = useMemo(() => selectCaptureData(activeCaptures, activeTasks, search), [activeCaptures, activeTasks, search, today])
   // Only messages still on screen count, so a search or another device's deletion never widens a delete.
   const selectedCaptures = useMemo(() => feed.captures.filter((capture) => selectedIds.has(capture.id)), [feed, selectedIds])
   const allSelected = feed.captures.length > 0 && selectedCaptures.length === feed.captures.length
-  const sections = useMemo(() => (view === 'tasks' ? taskSections(tasks) : []), [tasks, view])
-  const archive = useMemo(() => archivedTasks(tasks), [tasks, today])
-  const taskCount = useMemo(() => openTaskCount(tasks), [tasks])
   const sections = useMemo(() => (view === 'tasks' ? taskSections(activeTasks) : []), [activeTasks, view])
   const archive = useMemo(() => archivedTasks(activeTasks), [activeTasks, today])
   const noteArchive = useMemo(() => archivedCaptures(captures, tasks), [captures, tasks, today])
   const taskCount = useMemo(() => openTaskCount(activeTasks), [activeTasks])
   const counts: Record<Section, number> = {
-    feed: captures.length,
     feed: activeCaptures.length,
     tasks: taskCount,
     calendar: calendar.upcoming.length,
@@ -163,6 +156,12 @@ export function useWorkspaceView(data: WorkspaceData) {
     github: 0,
   }
   const shownMeeting = view === 'meetings' ? meetings.meeting : null
+
+  // All views share one scroller, so a new screen would open part-way down wherever the last one was
+  // scrolled. Each starts at its top; the Notes feed puts itself at its newest note instead.
+  useLayoutEffect(() => {
+    if (view !== 'feed') scrollRef.current?.scrollTo({ top: 0 })
+  }, [view, shownMeeting?.id])
 
   /** On the calendar the composer adds to the selected day; in a meeting, to the day on screen. */
   function composerFor() {
@@ -204,7 +203,6 @@ export function useWorkspaceView(data: WorkspaceData) {
     closeSearch,
     selecting,
     /** Undefined when there is nothing to select. */
-    toggleSelecting: selecting ? stopSelecting : view === 'feed' && captures.length ? startSelecting : undefined,
     toggleSelecting: selecting ? stopSelecting : view === 'feed' && activeCaptures.length ? startSelecting : undefined,
     stopSelecting,
     toggleSelected,
@@ -216,7 +214,6 @@ export function useWorkspaceView(data: WorkspaceData) {
     detail: shownMeeting
       ? scheduleLabel(shownMeeting, today)
       : viewDetail(view, {
-          notes: captures.length,
           notes: activeCaptures.length,
           openTasks: taskCount,
           matches: search.trim() ? feed.matchCount : null,
@@ -250,10 +247,10 @@ export function useWorkspaceView(data: WorkspaceData) {
     setConfirmation,
     composerRef,
     searchRef,
+    /** The one scroller that holds every view. */
+    scrollRef,
     feed,
     sections,
-    suggestions: tasks.filter((task) => task.suggestionStatus === 'suggested'),
-    generating: captures.filter((capture) => capture.ai === 'queued' || capture.ai === 'failed'),
     suggestions: activeTasks.filter((task) => task.suggestionStatus === 'suggested'),
     generating: activeCaptures.filter((capture) => capture.ai === 'queued' || capture.ai === 'failed'),
     archive,

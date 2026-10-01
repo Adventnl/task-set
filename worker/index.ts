@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import type { SyncRecord } from '../src/shared/types/sync'
-import { parseSyncRecord } from '../src/shared/utils/records'
+import { fitsInStorage, MAX_PUSH_BYTES, parseSyncRecord } from '../src/shared/utils/records'
 import { authConfigured, clearSessionCookie, createSessionCookie, hasSession, passcodeMatches } from './auth'
 import { json, readBody, readJson } from './http'
 import type { TaskSpace } from './taskSpace'
@@ -10,7 +10,6 @@ export { TaskSpace } from './taskSpace'
 /** Task Set is a single-person workspace, so every signed-in device shares one Durable Object. */
 const WORKSPACE = 'owner'
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024
-const MAX_PUSH_BYTES = 1024 * 1024
 const MAX_PUSH_RECORDS = 200
 const NO_SPEECH_LIMIT = 0.6
 const allowedAudio = new Set(['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/ogg'])
@@ -31,7 +30,8 @@ async function push(request: Request, space: DurableObjectStub<TaskSpace>): Prom
   const body = await readJson(request, MAX_PUSH_BYTES)
   const raw = body && typeof body === 'object' && 'records' in body && Array.isArray(body.records) ? body.records : null
   if (!raw || raw.length > MAX_PUSH_RECORDS) return json({ error: 'Invalid sync request' }, 400)
-  const records = raw.map(parseSyncRecord).filter((record): record is SyncRecord => record !== null)
+  // A record too large for one storage row is refused here, so it can never make the whole batch fail.
+  const records = raw.map(parseSyncRecord).filter((record): record is SyncRecord => record !== null && fitsInStorage(record))
   if (records.length !== raw.length) {
     console.error(JSON.stringify({ event: 'sync_records_rejected', count: raw.length - records.length }))
   }

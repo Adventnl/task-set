@@ -3,7 +3,6 @@ import { writeClipboard } from '../connectors/clipboardConnector'
 import type { SyncRecord } from '../shared/types/sync'
 import type { Capture, Editor, Task, TaskInput } from '../shared/types/task'
 import { markDeleted } from '../shared/utils/records'
-import { expiredTasks, taskFromEditor } from '../shared/utils/taskView'
 import { expiredCaptures, expiredTasks, taskFromEditor } from '../shared/utils/taskView'
 import { createId, saveLocal } from './localDataService'
 

@@ -1,4 +1,3 @@
-import { ARCHIVE_DAYS } from '../config/archive'
 import { ARCHIVE_DAYS, NOTE_ARCHIVE_DAYS } from '../config/archive'
 import type { Capture, Editor, Task, TaskInput, View } from '../types/task'
 import { DAY_MS, dateKey, dayOffset } from './dates'
@@ -204,7 +203,6 @@ export function selectCaptureData(captures: Capture[], tasks: Task[], search: st
   const activeCaptures = captures.filter((capture) => !capture.archivedAt && !capture.deletedAt)
   const tasksByCapture = new Map<string, Task[]>()
   for (const task of tasks) {
-    if (task.suggestionStatus === 'dismissed' || task.completedAt) continue
     if (task.suggestionStatus === 'dismissed' || task.completedAt || task.deletedAt) continue
     const linked = tasksByCapture.get(task.captureId) ?? []
     linked.push(task)
@@ -212,13 +210,11 @@ export function selectCaptureData(captures: Capture[], tasks: Task[], search: st
   }
   const term = search.trim().toLocaleLowerCase()
   const visibleCaptures = term
-    ? captures.filter(
     ? activeCaptures.filter(
         (capture) =>
           capture.text.toLocaleLowerCase().includes(term) ||
           tasksByCapture.get(capture.id)?.some((task) => task.title.toLocaleLowerCase().includes(term)),
       )
-    : captures
     : activeCaptures
   const days: CaptureDay[] = []
   for (const capture of visibleCaptures) {
