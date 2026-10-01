@@ -51,6 +51,7 @@ function migrateFromV1(transaction: IDBTransaction): void {
         createdAt: old.createdAt,
         updatedAt: old.createdAt,
         deletedAt: null,
+        archivedAt: null,
         ai: null,
       }
       cursor.update(value)

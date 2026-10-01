@@ -11,6 +11,7 @@ import ComingUp from '../../components/calendar/ComingUp'
 import CaptureFeed from '../../components/capture/CaptureFeed'
 import type { CaptureActions } from '../../components/capture/CaptureRow'
 import Composer from '../../components/capture/Composer'
+import NoteArchiveList from '../../components/capture/NoteArchiveList'
 import SelectionBar from '../../components/capture/SelectionBar'
 import ArchiveList from '../../components/task/ArchiveList'
 import TaskEditor from '../../components/task/TaskEditor'
@@ -29,6 +30,7 @@ import CalendarScreen from './CalendarScreen'
 import MeetingsScreen from './MeetingsScreen'
 import GitHubScreen from './GitHubScreen'
 
+const NOTES_PANEL = 'notes-panel'
 const TASKS_PANEL = 'tasks-panel'
 
 export default function TaskSetScreen() {
@@ -61,22 +63,32 @@ export default function TaskSetScreen() {
       confirmLabel: 'Delete task',
       onConfirm: () => data.deleteTask(task),
     })
-  const confirmDeleteCaptures = (captures: Capture[]) => {
+  const confirmArchiveCaptures = (captures: Capture[]) => {
     const one = captures.length === 1
     ui.setConfirmation({
       title: one ? 'Delete this note?' : `Delete ${captures.length} notes?`,
-      message: `Tasks made from ${one ? 'it' : 'them'} are deleted too, on every device.`,
+      message: one
+        ? 'It will stay in the Archive for 30 days before being deleted for good. Tasks made from it are archived too.'
+        : `They will stay in the Archive for 30 days before being deleted for good. Tasks made from them are archived too.`,
       confirmLabel: one ? 'Delete note' : `Delete ${captures.length} notes`,
       onConfirm: async () => {
-        if (await data.deleteCaptures(captures)) ui.stopSelecting()
+        if (await data.archiveCaptures(captures)) ui.stopSelecting()
       },
+    })
+  }
+  const confirmDeletePermanently = (capture: Capture) => {
+    ui.setConfirmation({
+      title: 'Delete this note permanently?',
+      message: 'It is deleted for good, and tasks made from it are deleted too.',
+      confirmLabel: 'Delete note',
+      onConfirm: () => data.deleteCaptures([capture]),
     })
   }
   const actions: CaptureActions = {
     onCopy: (capture) => void data.copyCapture(capture),
     onGenerateTasks: (capture) => void data.generateTasks(capture),
     onCreateTask: (capture) => ui.setEditor({ captureId: capture.id }),
-    onDelete: (capture) => confirmDeleteCaptures([capture]),
+    onDelete: (capture) => confirmArchiveCaptures([capture]),
     onRetry: (capture) => void data.retrySuggestions(capture),
     onAcceptSuggestion: (task) => void data.reviewSuggestion(task, 'accept'),
     onEditTask: editTask,
@@ -99,15 +111,26 @@ export default function TaskSetScreen() {
       case 'github':
         return <GitHubScreen github={github} />
       case 'feed':
+      case 'noteArchive':
         return (
-          <CaptureFeed
-            days={ui.feed.days}
-            tasksByCapture={ui.feed.tasksByCapture}
-            search={ui.search.trim()}
-            selectedIds={ui.selecting ? ui.selectedIds : null}
-            scrollRef={ui.scrollRef}
-            actions={actions}
-          />
+          <div role="tabpanel" id={NOTES_PANEL} aria-labelledby={tabId(ui.view)}>
+            {ui.view === 'feed' ? (
+              <CaptureFeed
+                days={ui.feed.days}
+                tasksByCapture={ui.feed.tasksByCapture}
+                search={ui.search.trim()}
+                selectedIds={ui.selecting ? ui.selectedIds : null}
+                scrollRef={ui.scrollRef}
+                actions={actions}
+              />
+            ) : (
+              <NoteArchiveList
+                items={ui.noteArchive}
+                onRestore={(capture) => void data.restoreCaptures([capture])}
+                onDelete={confirmDeletePermanently}
+              />
+            )}
+          </div>
         )
       case 'tasks':
       case 'archive':
@@ -187,6 +210,9 @@ export default function TaskSetScreen() {
           onToggleSelecting={ui.toggleSelecting}
           onOpenNavigation={ui.openNavigation}
         />
+        {ui.section === 'feed' && (
+          <Tabs label="Notes" tabs={ui.noteTabs} selected={ui.view === 'noteArchive' ? 'noteArchive' : 'feed'} panelId={NOTES_PANEL} onSelect={ui.selectView} />
+        )}
         {ui.section === 'tasks' && (
           <Tabs label="Tasks" tabs={ui.taskTabs} selected={ui.view === 'archive' ? 'archive' : 'tasks'} panelId={TASKS_PANEL} onSelect={ui.selectView} />
         )}
@@ -198,7 +224,14 @@ export default function TaskSetScreen() {
         <div className="dock" hidden={ui.view === 'github' && !data.notice && !data.archivedTask && !data.flash}>
           {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
           {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
-          {data.archivedTask ? (
+          {data.archivedNotesToast ? (
+            <Toast
+              message={data.archivedNotesToast.message}
+              actionLabel="Undo"
+              onAction={data.archivedNotesToast.undo}
+              onDismiss={data.archivedNotesToast.dismiss}
+            />
+          ) : data.archivedTask ? (
             <Toast
               key={data.archivedTask.id}
               message={`“${data.archivedTask.title}” moved to Archive`}
@@ -214,7 +247,7 @@ export default function TaskSetScreen() {
               count={ui.selectedCaptures.length}
               allSelected={ui.allSelected}
               onToggleAll={ui.toggleSelectAll}
-              onDelete={() => confirmDeleteCaptures(ui.selectedCaptures)}
+              onDelete={() => confirmArchiveCaptures(ui.selectedCaptures)}
               onCancel={ui.stopSelecting}
             />
           )}

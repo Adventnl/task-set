@@ -2367,3 +2367,14 @@ textarea.text-field {
 @media (max-width: 760px) {
   .github-repositories { max-height: none; overflow: visible; }
 }
+
+/* An archived note shows its first lines, not the whole text. */
+.note-archive-text {
+  display: -webkit-box;
+  overflow: hidden;
+  text-decoration: none;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}

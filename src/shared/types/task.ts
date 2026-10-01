@@ -10,6 +10,7 @@ export interface Capture {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  archivedAt: string | null
   ai: AiStatus | null
 }
 
@@ -27,8 +28,8 @@ export interface Task {
   suggestionStatus: 'suggested' | 'dismissed' | null
 }
 
-/** `feed` is the Notes view; `archive` is the Tasks tab that holds completed tasks until they expire. */
-export type View = 'feed' | 'tasks' | 'archive' | 'calendar' | 'meetings' | 'github'
+/** `feed` is the Notes view; `noteArchive` is its Archive tab; `archive` is the Tasks tab that holds completed tasks until they expire. */
+export type View = 'feed' | 'noteArchive' | 'tasks' | 'archive' | 'calendar' | 'meetings' | 'github'
 /** Where the composer's words go: a new note, a calendar day, or a meeting day's notes. */
 export type ComposerTarget = { kind: 'note' } | { kind: 'event'; date: string } | { kind: 'meetingNote'; meetingId: string; date: string }
 export type Editor = { captureId: string; task?: Task }

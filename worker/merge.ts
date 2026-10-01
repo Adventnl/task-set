@@ -9,15 +9,32 @@ type RecordType = SyncRecord['type']
 
 /**
  * Server rules for an incoming capture. Text is immutable and AI state is server-owned, so the
- * only accepted change to a stored capture is deletion. Returns null when nothing changes.
+ * accepted changes to a stored capture are archiving, restoring, and deletion. Returns null when nothing changes.
  */
 export function mergeCapture(existing: Capture | null, incoming: Capture): Capture | null {
-  if (!existing) return { ...incoming, ai: incoming.deletedAt ? null : automaticGeneration(incoming) ? 'queued' : 'ready' }
-  if (existing.deletedAt || !incoming.deletedAt) return null
+  if (!existing) {
+    return {
+      ...incoming,
+      archivedAt: incoming.archivedAt ?? null,
+      ai: incoming.deletedAt || incoming.archivedAt ? null : automaticGeneration(incoming) ? 'queued' : 'ready',
+    }
+  }
+  if (existing.deletedAt) return null
+  if (incoming.deletedAt) {
+    return {
+      ...existing,
+      deletedAt: incoming.deletedAt,
+      updatedAt: incoming.updatedAt > existing.updatedAt ? incoming.updatedAt : existing.updatedAt,
+    }
+  }
+  if (incoming.updatedAt <= existing.updatedAt) return null
+  const incomingArchived = incoming.archivedAt ?? null
+  const existingArchived = existing.archivedAt ?? null
+  if (incomingArchived === existingArchived) return null
   return {
     ...existing,
-    deletedAt: incoming.deletedAt,
-    updatedAt: incoming.updatedAt > existing.updatedAt ? incoming.updatedAt : existing.updatedAt,
+    archivedAt: incomingArchived,
+    updatedAt: incoming.updatedAt,
   }
 }
 
