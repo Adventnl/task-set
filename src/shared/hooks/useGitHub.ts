@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { bindGitHub, discoverGitHubRepositories, isGitHubAuthenticationError, loadGitHubActivity, readGitHubBinding, readGitHubSelection, saveGitHubRepositories, saveGitHubSelection } from '../../services/githubService'
+import { connectOwnerGitHub, discoverGitHubRepositories, isGitHubAuthenticationError, loadGitHubActivity, readGitHubSelection, saveGitHubSelection, restoreGitHubActivity, saveGitHubActivity, readOwnerGitHubBinding, saveOwnerGitHubBinding } from '../../services/githubService'
 import type { GitHubActivity, GitHubBinding } from '../types/github'
 
 const REFRESH_MS = 60_000
 
 export function useGitHub(active: boolean, signedIn: boolean) {
   const connecting = useRef<AbortController | null>(null)
+  const lastDiscovery = useRef(0)
   const [binding, setBinding] = useState<GitHubBinding | null>(null)
   const [selected, setSelected] = useState<number[]>([])
   const selection = useRef<number[]>([])
   const [activity, setActivity] = useState<GitHubActivity | null>(null)
+  const activityRef = useRef(activity)
+  activityRef.current = activity
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [discovering, setDiscovering] = useState(false)
@@ -26,17 +29,7 @@ export function useGitHub(active: boolean, signedIn: boolean) {
   }
 
   useEffect(() => {
-    if (signedIn) {
-      try {
-        const saved = readGitHubBinding()
-        setBinding(saved)
-        setRepositories(saved?.repositories ?? [])
-        updateSelection(saved ? (readGitHubSelection(saved.login) ?? saved.repositories.map((repo) => repo.id)).filter((id) => saved.repositories.some((repo) => repo.id === id)) : [])
-        setError('')
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Could not restore the GitHub binding.')
-      }
-    } else {
+    if (!signedIn) {
       setBinding(null)
       setRepositories([])
       updateSelection([])
@@ -51,7 +44,7 @@ export function useGitHub(active: boolean, signedIn: boolean) {
     return () => { connecting.current?.abort() }
   }, [signedIn])
 
-  async function connect(value: string) {
+  async function connect() {
     if (!signedIn) return
     connecting.current?.abort()
     const controller = new AbortController()
@@ -60,19 +53,38 @@ export function useGitHub(active: boolean, signedIn: boolean) {
     setDiscovering(false)
     setError('')
     try {
-      const connection = await bindGitHub(value, AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
+      const connection = await connectOwnerGitHub(AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
       if (controller.signal.aborted) return
       setRepositories(connection.repositories)
+      lastDiscovery.current = Date.now()
       const saved = readGitHubSelection(connection.login)
       updateSelection(saved === null ? connection.repositories.map((repo) => repo.id) : saved.filter((id) => connection.repositories.some((repo) => repo.id === id)))
       setNeedsToken(false)
       setBinding(connection)
+      setActivity(restoreGitHubActivity(connection.login, selection.current))
+      try { saveOwnerGitHubBinding(connection); setStorageError('') } catch { setStorageError('Repository list could not be cached on this device.') }
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not bind GitHub on this device.')
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not connect to the owner?s GitHub account.')
     } finally {
       if (!controller.signal.aborted) setBusy(false)
     }
   }
+
+  useEffect(() => {
+    if (!signedIn) return
+    const saved = readOwnerGitHubBinding()
+    if (saved) {
+      setBinding(saved)
+      setRepositories(saved.repositories)
+      const ids = (readGitHubSelection(saved.login) ?? saved.repositories.map((repo) => repo.id)).filter((id) => saved.repositories.some((repo) => repo.id === id))
+      updateSelection(ids)
+      setActivity(restoreGitHubActivity(saved.login, ids))
+    }
+  }, [signedIn])
+
+  useEffect(() => {
+    if (active && signedIn && !binding && !busy && !error) void connect()
+  }, [active, signedIn, binding, busy, error])
 
   async function reloadRepositories() {
     if (!binding || discovering) return
@@ -82,11 +94,13 @@ export function useGitHub(active: boolean, signedIn: boolean) {
     setDiscovering(true)
     setError('')
     try {
-      const found = await discoverGitHubRepositories(binding.token, AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
+      const found = await discoverGitHubRepositories('', AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
       if (controller.signal.aborted) return
-      saveGitHubRepositories(binding, found)
+      saveOwnerGitHubBinding({ ...binding, repositories: found })
       setRepositories(found)
-      choose(selection.current.filter((id) => found.some((repo) => repo.id === id)))
+      lastDiscovery.current = Date.now()
+      const selectedAll = repositories.length > 0 && selection.current.length === repositories.length
+      choose(selectedAll ? found.map((repo) => repo.id) : selection.current.filter((id) => found.some((repo) => repo.id === id)))
     } catch (cause) {
       if (!controller.signal.aborted) {
         setError(cause instanceof Error ? cause.message : 'Could not reload repositories.')
@@ -99,7 +113,7 @@ export function useGitHub(active: boolean, signedIn: boolean) {
 
   function choose(ids: number[]) {
     updateSelection(ids)
-    setActivity(null)
+    setActivity(binding ? restoreGitHubActivity(binding.login, ids) : null)
     setError('')
     try {
       if (binding) saveGitHubSelection(binding.login, ids)
@@ -123,11 +137,16 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       setCompleted(0)
       setError('')
       try {
+        const previous = activityRef.current
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(90_000)])
-        const result = await loadGitHubActivity(repositories.filter((repo) => selected.includes(repo.id)), bound.token, signal, (partial, count) => {
-          if (!controller.signal.aborted) { setActivity(partial); setCompleted(count) }
+        const result = await loadGitHubActivity(repositories.filter((repo) => selected.includes(repo.id)), '', signal, (partial, count) => {
+          if (!controller.signal.aborted) { if (!previous) setActivity(partial); setCompleted(count) }
         })
-        if (!controller.signal.aborted) setActivity(result)
+        if (!controller.signal.aborted) {
+          const snapshot = previous && result.warnings.length ? { ...previous, warnings: ['Refresh was incomplete. Showing the last saved activity until a complete refresh succeeds.', ...result.warnings] } : result
+          setActivity(snapshot)
+          try { saveGitHubActivity(bound.login, selected, snapshot); setStorageError('') } catch { setStorageError('Activity loaded, but could not be cached on this device.') }
+        }
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof DOMException && cause.name === 'TimeoutError' ? 'GitHub refresh timed out. Loaded results are shown below; select fewer repositories or try again.' : cause instanceof Error ? cause.message : 'Could not refresh GitHub activity.')
@@ -152,6 +171,14 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [active, signedIn, binding, repositories, selected, needsToken, revision])
+
+  useEffect(() => {
+    if (!active || !signedIn || !binding || needsToken) return
+    const check = () => { if (!document.hidden && Date.now() - lastDiscovery.current > 600_000) { lastDiscovery.current = Date.now(); void reloadRepositories() } }
+    check()
+    const timer = window.setInterval(check, 600_000)
+    return () => window.clearInterval(timer)
+  }, [active, signedIn, binding, needsToken])
 
   return {
     login: binding?.login ?? '', repositories, selected, activity, busy, loading, discovering, completed, needsToken, error, storageError,

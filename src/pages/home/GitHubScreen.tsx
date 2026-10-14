@@ -7,8 +7,9 @@ export default function GitHubScreen({ github }: { github: ReturnType<typeof use
   return (
     <div className="github-screen">
       {github.error && <p className="form-error" role="alert">{github.error}</p>}
-      {!github.login || github.needsToken ? <GitHubConnection busy={github.busy} login={github.login} onConnect={github.connect} /> : (
+      {!github.login ? <GitHubConnection busy={github.busy} login={github.login} onConnect={github.connect} /> : (
         <>
+          {github.needsToken && <GitHubConnection busy={github.busy} login={github.login} onConnect={github.connect} />}
           <div className="github-toolbar">
             <p className="modal-text">Connected as <strong>{github.login}</strong></p>
             <div className="github-actions">

@@ -34,7 +34,7 @@ export default function MeetingEditor({
   const [title, setTitle] = useState(meeting?.title ?? '')
   const [date, setDate] = useState(meeting?.date ?? defaultDate)
   const [time, setTime] = useState(meeting?.time ?? '')
-  const [repeat, setRepeat] = useState<Meeting['repeat']>(meeting ? meeting.repeat : 'weekly')
+  const [repeat, setRepeat] = useState<Meeting['repeat']>(meeting?.repeat ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const valid = !!title.trim() && isDateKey(date)

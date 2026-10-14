@@ -46,6 +46,8 @@ export function mergeMeetingNote(existing: MeetingNote | null, incoming: Meeting
  */
 export function mergeRecord(existing: SyncRecord | null, incoming: SyncRecord): SyncRecord | null {
   switch (incoming.type) {
+    case 'mapCategory': { const value = mergeEdit(existing?.type === 'mapCategory' ? existing.value : null, incoming.value); return value && { type: 'mapCategory', value } }
+    case 'mapPin': { const value = mergeEdit(existing?.type === 'mapPin' ? existing.value : null, incoming.value); return value && { type: 'mapPin', value } }
     case 'capture': {
       const value = mergeCapture(existing?.type === 'capture' ? existing.value : null, incoming.value)
       return value && { type: 'capture', value }
@@ -70,11 +72,12 @@ export function mergeRecord(existing: SyncRecord | null, incoming: SyncRecord): 
 }
 
 /** Deleting a parent deletes its children: a capture's tasks and a meeting's notes. */
-export const CHILD_TYPE: Partial<Record<RecordType, RecordType>> = { capture: 'task', meeting: 'meetingNote' }
+export const CHILD_TYPE: Partial<Record<RecordType, RecordType>> = { capture: 'task', meeting: 'meetingNote', mapCategory: 'mapPin' }
 
 /** The record a child belongs to, or null for a record that has no parent. */
 export function parentOf(record: SyncRecord): { type: RecordType; id: string } | null {
-  if (record.type === 'task') return { type: 'capture', id: record.value.captureId }
+  if (record.type === 'mapPin') return { type: 'mapCategory', id: record.value.categoryId }
+  if (record.type === 'task' && record.value.captureId) return { type: 'capture', id: record.value.captureId }
   if (record.type === 'meetingNote') return { type: 'meeting', id: record.value.meetingId }
   return null
 }
@@ -83,6 +86,8 @@ export function parentOf(record: SyncRecord): { type: RecordType; id: string } |
 export function deletedRecord(record: SyncRecord, at: string): SyncRecord {
   const deleted = <T extends Editable>(value: T): T => ({ ...value, deletedAt: at, updatedAt: at > value.updatedAt ? at : value.updatedAt })
   switch (record.type) {
+    case 'mapCategory': return { type: 'mapCategory', value: deleted(record.value) }
+    case 'mapPin': return { type: 'mapPin', value: deleted(record.value) }
     case 'capture':
       return { type: 'capture', value: deleted(record.value) }
     case 'task':

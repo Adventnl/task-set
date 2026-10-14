@@ -1,6 +1,7 @@
 import MeetingDetail from '../../components/meeting/MeetingDetail'
 import MeetingEditor from '../../components/meeting/MeetingEditor'
 import MeetingList from '../../components/meeting/MeetingList'
+import Tabs from '../../components/app/Tabs'
 import type { useMeetingsView } from '../../shared/hooks/useMeetingsView'
 import type { Confirmation } from '../../shared/hooks/useWorkspaceView'
 import type { Meeting, MeetingInput, MeetingNote } from '../../shared/types/meeting'
@@ -40,7 +41,12 @@ export default function MeetingsScreen({
           }
         />
       ) : (
-        <MeetingList sections={meetings.sections} today={today} onOpen={(id) => meetings.openMeeting(id)} onAdd={meetings.startNew} />
+        <>
+          <Tabs label="Meetings" tabs={[{ id: 'all', label: 'All meetings', count: 0 }, { id: 'past', label: 'Previous meetings', count: 0 }]} selected={meetings.tab} panelId="meetings-panel" onSelect={meetings.setTab} />
+          <div role="tabpanel" id="meetings-panel" aria-labelledby={`tab-${meetings.tab}`}>
+            <MeetingList sections={meetings.sections} today={today} onOpen={meetings.openMeeting} onAdd={meetings.startNew} onDelete={(item) => confirm({ title: `Delete “${item.title}”?`, message: 'Its notes are deleted too, on every device.', confirmLabel: 'Delete meeting', onConfirm: () => onDeleteMeeting(item) })} />
+          </div>
+        </>
       )}
       {editor && (
         <MeetingEditor

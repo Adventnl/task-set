@@ -3,6 +3,7 @@ import type { Meeting, MeetingNote } from '../types/meeting'
 import type { SyncRecord, WorkspaceData } from '../types/sync'
 import type { Capture, Task } from '../types/task'
 import { isDateKey, isTimeKey } from './dates'
+import type { MapCategory, MapPin } from '../types/map'
 
 export const MAX_CAPTURE_LENGTH = 4000
 export const MAX_TITLE_LENGTH = 200
@@ -71,10 +72,12 @@ export function parseTask(value: unknown): Task | null {
   const dueAt = isoOrNull(value.dueAt ?? null)
   const reminderAt = isoOrNull(value.reminderAt ?? null)
   const completedAt = isoOrNull(value.completedAt ?? null)
-  if (!base || !isId(captureId) || !isText(title, MAX_TITLE_LENGTH) || typeof pinned !== 'boolean') return null
+  if (!base || (captureId !== null && !isId(captureId)) || !isText(title, MAX_TITLE_LENGTH) || typeof pinned !== 'boolean') return null
   if (dueAt === undefined || reminderAt === undefined || completedAt === undefined) return null
   if (suggestionStatus !== null && suggestionStatus !== 'suggested' && suggestionStatus !== 'dismissed') return null
-  return { ...base, captureId, title: title.trim(), dueAt, reminderAt, pinned, completedAt, suggestionStatus }
+  const tags = value.tags
+  if (tags !== undefined && (!Array.isArray(tags) || tags.length > 5 || !tags.every((tag) => isText(tag, 30)))) return null
+  return { ...base, captureId, title: title.trim(), dueAt, reminderAt, pinned, completedAt, suggestionStatus, ...(tags ? { tags: tags as string[] } : {}) }
 }
 
 export function parseEvent(value: unknown): CalendarEvent | null {
@@ -82,7 +85,9 @@ export function parseEvent(value: unknown): CalendarEvent | null {
   const base = parseBase(value)
   const { date, text } = value
   if (!base || !isDateKey(date) || !isText(text, MAX_CAPTURE_LENGTH)) return null
-  return { ...base, date, text }
+  if (value.repeat != null && value.repeat !== 'yearly') return null
+  if (value.category != null && value.category !== 'birthday') return null
+  return { ...base, date, text, ...(value.repeat !== undefined ? { repeat: value.repeat as 'yearly' | null } : {}), ...(value.category !== undefined ? { category: value.category as 'birthday' | null } : {}) }
 }
 
 export function parseMeeting(value: unknown): Meeting | null {
@@ -107,6 +112,8 @@ export function parseMeetingNote(value: unknown): MeetingNote | null {
 export function parseSyncRecord(value: unknown): SyncRecord | null {
   if (!isObject(value)) return null
   switch (value.type) {
+    case 'mapCategory': { const category = parseMapCategory(value.value); return category && { type: 'mapCategory', value: category } }
+    case 'mapPin': { const pin = parseMapPin(value.value); return pin && { type: 'mapPin', value: pin } }
     case 'capture': {
       const capture = parseCapture(value.value)
       return capture && { type: 'capture', value: capture }
@@ -140,7 +147,7 @@ export function markDeleted<T extends Base>(value: T, at: string): T {
   return { ...value, deletedAt: at, updatedAt: at }
 }
 
-export const EMPTY_WORKSPACE: WorkspaceData = { captures: [], tasks: [], events: [], meetings: [], meetingNotes: [] }
+export const EMPTY_WORKSPACE: WorkspaceData = { captures: [], tasks: [], events: [], meetings: [], meetingNotes: [], mapCategories: [], mapPins: [] }
 
 export function byCreatedAt<T extends Base>(a: T, b: T): number {
   return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
@@ -161,10 +168,27 @@ function applyValues<T extends Base>(list: T[], values: T[]): T[] {
 export function mergeRecords(state: WorkspaceData, records: SyncRecord[]): WorkspaceData {
   if (!records.length) return state
   return {
+    mapCategories: applyValues(state.mapCategories, records.flatMap((record) => record.type === 'mapCategory' ? [record.value] : [])),
+    mapPins: applyValues(state.mapPins, records.flatMap((record) => record.type === 'mapPin' ? [record.value] : [])),
     captures: applyValues(state.captures, records.flatMap((record) => (record.type === 'capture' ? [record.value] : []))),
     tasks: applyValues(state.tasks, records.flatMap((record) => (record.type === 'task' ? [record.value] : []))),
     events: applyValues(state.events, records.flatMap((record) => (record.type === 'event' ? [record.value] : []))),
     meetings: applyValues(state.meetings, records.flatMap((record) => (record.type === 'meeting' ? [record.value] : []))),
     meetingNotes: applyValues(state.meetingNotes, records.flatMap((record) => (record.type === 'meetingNote' ? [record.value] : []))),
   }
+}
+
+export function parseMapCategory(value: unknown): MapCategory | null {
+  if (!isObject(value)) return null
+  const base = parseBase(value)
+  if (!base || !isText(value.name, 60) || typeof value.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(value.color)) return null
+  return { ...base, name: value.name.trim(), color: value.color }
+}
+export function parseMapPin(value: unknown): MapPin | null {
+  if (!isObject(value)) return null
+  const base = parseBase(value)
+  const { name, latitude, longitude, categoryId, note } = value
+  if (!base || !isText(name, 200) || !isId(categoryId) || typeof note !== 'string' || note.length > MAX_CAPTURE_LENGTH) return null
+  if (typeof latitude !== 'number' || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || typeof longitude !== 'number' || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return null
+  return { ...base, name: name.trim(), latitude, longitude, categoryId, note }
 }

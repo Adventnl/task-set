@@ -6,7 +6,7 @@ Status: implemented in the browser app, 26 September 2026; notes-app redesign an
 
 Task Set should look and feel like a notes app: a blank page that is always ready for the next thought. Capture is the main action. Tasks grow from captures without hiding or rewriting the original words. The interface is quiet, private, and comfortable in a Mac browser window. It borrows native macOS habits, such as clear focus states and keyboard access, without drawing a fake desktop window inside the page.
 
-The app has four sections, each one idea: **Notes** (what you wrote), **Tasks** (what to do, with the **Archive** of what is done as a tab), **Calendar** (what is on which day), and **Meetings** (notes for the meetings you go to). The same composer at the bottom serves all of them, so adding anything is always one field away and never a form.
+The core sections each own one idea: **Notes** (what you wrote), **Tasks** (what to do, with the **Archive** of what is done as a tab), **Calendar** (what is on which day), and **Meetings** (notes for the meetings you go to). A composer at the bottom sends only to its current section; GitHub and Map use their own controls.
 
 ## Screen structure
 
@@ -14,7 +14,7 @@ At desktop width, use a softly tinted sidebar and one reading column on a paper-
 
 Notes is a chronological record of captures, grouped under quiet day headings. Show the original text at a generous reading size with a quiet time label and a hairline between notes. New notes appear at the end and remain visible after sending. Do not turn each note into a floating card or chat bubble. A note displays its original text and a quiet meta line below: the time, “Voice” for a spoken note, and how many open tasks came from it. The ⋯ button sits beside the text, and its **Copy / Generate tasks / Make task / Delete** popover opens beside the button. Long press or right-click opens the same actions. Copy puts the note's words on the clipboard and confirms with a short “Note copied” toast. Generate tasks asks the AI for the note's tasks and creates them in Tasks; while it runs the item reads “Finding tasks…” and is disabled. Under the note, a quiet line says “Finding tasks…” or “Couldn’t find tasks. Try again”.
 
-Keep the composer at the bottom of the main column on every view, so talking or typing is always one action away. It works like WeChat: a button at its left switches between typing (a microphone icon) and voice (a keyboard icon). Typing shows a rounded field with Send once there is text; switching to typing opens the keyboard. Voice replaces the field with a wide **Hold to talk** bar. Its placeholder says where the words will go: “Write a note…” in Notes and Tasks, “Add to today…” or “Add to Wed 30 Sep…” on the Calendar, and “Add to the next meeting…” inside a meeting. A note sent from Tasks or the meeting list jumps to Notes; calendar and meeting entries stay where they were added. The empty Notes view shows one short invitation (“A blank page”), with the composer already available.
+Keep the composer at the bottom of the main column on every view, so talking or typing is always one action away. It works like WeChat: a button at its left switches between typing (a microphone icon) and voice (a keyboard icon). Typing shows a rounded field with Send once there is text; switching to typing opens the keyboard. Voice replaces the field with a wide **Hold to talk** bar. Its placeholder says where the words will go: “Write a note…” in Notes and Tasks, “Add to today…” or “Add to Wed 30 Sep…” on the Calendar, and “Add to the next meeting…” inside a meeting. Tasks saves a standalone task; the meeting list saves a one-off meeting. Calendar opens the date it saved to; meeting notes stay in their meeting. The empty Notes view shows one short invitation (“A blank page”), with the composer already available.
 
 **Coming up.** Above the notes, the home view shows the next three calendar events as amber cards in one row: a bold countdown (“Today”, “Tomorrow”, “In 4 days”) over the event's words, which wrap to two lines on narrow screens. An event today is a solid amber card; later ones are soft amber. A card opens its day in the Calendar. The row is absent when nothing is coming up, and it steps aside while searching or selecting notes.
 
@@ -70,3 +70,14 @@ GitHub is a fifth section in the sidebar, which is the navigation drawer on phon
 ## Always on and branding
 
 Settings includes an accessible **Always on** switch to keep the screen on while the app is visible, with active, paused, unavailable, and failure feedback. The supplied `public/icons/Hanoryx Systems.png` is the logo source for the sidebar, sign-in screen, favicon, Apple touch icon, and install icons. Preserve its proportions; the maskable export includes safe padding.
+
+
+## Interaction update ? 14 October 2026
+
+The [owner workflow revision](plan.md#owner-workflow-revision--14-october-2026) supersedes older GitHub/phone navigation descriptions. Phones have a six-item glass bottom bar (Notes, Tasks, Calendar, Meetings, GitHub, Map), with the composer above it and safe-area spacing. The header menu retains Settings and installation. Below 380 px labels remain readable and every item has a 44 px or larger touch area.
+
+Calendar's month select and year field allow a direct jump without arrow repetition; month arrows and Today remain. Region selection/Use my location sit above the grid. Holidays have an explicit public-holiday or observance description in the agenda. Quick entries preserve the user's words and open their parsed day; birthday/yearly toggles appear in the event editor.
+
+Meetings adds All/Previous tabs and a visible delete action beside each row, and new meetings default to Once. Tasks shows optional tag labels with editing in the existing task dialog. Notes menus are viewport-positioned floating panels that do not change the scrolling area's size, and Shift opens the hovered note's actions without moving keyboard focus.
+
+GitHub opens the owner account automatically and retains the cached activity while revalidating. Access failures show Retry and an error, with no browser token-entry flow. Map uses the existing reading column: a place search, colour category filters, interactive map, category creation and a keyboard-accessible saved-place list. Picking a location opens the place editor with name, category and optional notes. Category deletion clearly includes its pins.

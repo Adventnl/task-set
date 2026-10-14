@@ -37,6 +37,6 @@ describe('local database upgrade', () => {
     await openVersion2(42)
     const local = await import('../src/services/localDataService')
     expect(await local.readCursor()).toBe(0)
-    expect(await local.loadData()).toEqual({ captures: [], tasks: [], events: [], meetings: [], meetingNotes: [] })
+    expect(await local.loadData()).toEqual({ captures: [], tasks: [], events: [], meetings: [], meetingNotes: [], mapCategories: [], mapPins: [] })
   })
 })

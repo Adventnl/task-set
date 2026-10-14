@@ -19,6 +19,8 @@ export default function EventEditor({
 }) {
   const [text, setText] = useState(event.text)
   const [date, setDate] = useState(event.date)
+  const [birthday, setBirthday] = useState(event.category === 'birthday')
+  const [yearly, setYearly] = useState(event.repeat === 'yearly')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const valid = !!text.trim() && isDateKey(date)
@@ -29,7 +31,7 @@ export default function EventEditor({
     setBusy(true)
     setError('')
     try {
-      await onSave({ date, text: text.trim() })
+      await onSave({ date, text: text.trim(), category: birthday ? 'birthday' : null, repeat: yearly || birthday ? 'yearly' : null })
       onClose()
     } catch {
       setError('Could not save on this device. Try again.')
@@ -65,6 +67,8 @@ export default function EventEditor({
           Day
         </label>
         <input id="event-date" className="text-field" type="date" value={date} onChange={(change) => setDate(change.target.value)} required />
+        <label className="check-field"><input type="checkbox" checked={birthday} onChange={(change) => setBirthday(change.target.checked)} /> Birthday</label>
+        <label className="check-field"><input type="checkbox" checked={yearly || birthday} disabled={birthday} onChange={(change) => setYearly(change.target.checked)} /> Repeat every year</label>
         {error && (
           <p className="form-error" role="alert">
             {error}

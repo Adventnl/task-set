@@ -1,22 +1,35 @@
 import * as calendar from '../../services/calendarService'
 import * as meetings from '../../services/meetingService'
+import * as tasks from '../../services/workspaceService'
+import { quickCalendarInput } from '../utils/quickCalendar'
+import { dateKey, shortDayLabel } from '../utils/dates'
+import { MAX_TITLE_LENGTH } from '../utils/records'
 import type { CalendarEvent, EventInput } from '../types/calendar'
 import type { Meeting, MeetingInput, MeetingNote } from '../types/meeting'
 import type { Capture, ComposerTarget } from '../types/task'
-import { shortDayLabel } from '../utils/dates'
 import type { useTaskSet } from './useTaskSet'
 
 const KEPT = 'Could not save that on this device. Your words are still in the box; try again.'
 
 /** Calendar and meeting actions, and sending the composer's words where they belong. */
-export function useSchedule({ workspace, commit, persist, sendCapture }: ReturnType<typeof useTaskSet>) {
+export function useSchedule({ workspace, commit, persist, sendCapture, setNotice }: ReturnType<typeof useTaskSet>, onCalendarAdded: (date: string) => void) {
   /** Resolves false when nothing was saved, so the composer keeps the words. */
   function send(target: ComposerTarget, text: string, kind: Capture['kind']): Promise<boolean> {
     switch (target.kind) {
+      case 'task':
+        if (text.trim().length > MAX_TITLE_LENGTH) { setNotice(`Keep the task title under ${MAX_TITLE_LENGTH} characters.`); return Promise.resolve(false) }
+        return commit(`task:${text}`, () => tasks.saveTask({ captureId: null }, { title: text.trim(), dueAt: null, reminderAt: null, pinned: false }), 'Task created', KEPT)
+      case 'meeting': {
+        const input = quickCalendarInput(text, target.date, dateKey(new Date()))
+        if (text.trim().length > MAX_TITLE_LENGTH) { setNotice(`Keep the meeting name under ${MAX_TITLE_LENGTH} characters.`); return Promise.resolve(false) }
+        return commit(`meeting:${text}`, () => meetings.saveMeeting(null, { title: text.trim(), date: input.date, time: null, repeat: null }), 'Meeting added', KEPT)
+      }
       case 'note':
         return sendCapture(text, kind)
-      case 'event':
-        return commit(`event:${target.date}:${text}`, () => calendar.createEvent({ date: target.date, text }), `Added to ${shortDayLabel(target.date)}`, KEPT)
+      case 'event': {
+        const input = quickCalendarInput(text, target.date, dateKey(new Date()))
+        return commit(`event:${target.date}:${text}`, () => calendar.createEvent(input), `Added to ${shortDayLabel(input.date)}`, KEPT).then((saved) => { if (saved) onCalendarAdded(input.date); return saved })
+      }
       case 'meetingNote':
         return commit(
           `meetingNote:${target.meetingId}:${target.date}:${text}`,

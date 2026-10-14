@@ -1,4 +1,5 @@
-import { GitHubAuthenticationError, githubList, githubRequest, readGitHubBindingData, saveGitHubBindingData } from '../connectors/githubConnector'
+import { GITHUB_OWNER } from '../shared/config/owner'
+import { GitHubAuthenticationError, githubList, githubRequest, readGitHubSnapshot, cacheGitHubSnapshot, readOwnerGitHubData, saveOwnerGitHubData } from '../connectors/githubConnector'
 import type { GitHubActivity, GitHubBinding, GitHubBranch, GitHubPullRequest, GitHubRepository } from '../shared/types/github'
 import { checkSummary, githubNumber, githubObject, githubText, parsePull, parseRepository, repositoryPath } from '../shared/utils/github'
 
@@ -13,11 +14,6 @@ async function mapLimited<T, R>(items: T[], operation: (item: T) => Promise<R>, 
     }
   }))
   return results
-}
-
-export async function connectGitHub(token: string, signal: AbortSignal): Promise<{ login: string; repositories: GitHubRepository[] }> {
-  const user = githubObject(await githubRequest('/user', token, signal))
-  return { login: githubText(user.login), repositories: await discoverGitHubRepositories(token, signal) }
 }
 
 /** Repository discovery is separate from account verification and activity refresh. */
@@ -83,11 +79,17 @@ export async function loadGitHubActivity(repositories: GitHubRepository[], token
         warnings.push(`${repo.name}: ${failure(error, signal)} Pull requests unavailable.`)
       }
       try {
-        const names = (await githubList(`${path}/branches`, token, signal)).map((value) => githubText(githubObject(value).name)).filter((name) => name !== repo.defaultBranch)
+        const listed = (await githubList(`${path}/branches`, token, signal)).map(githubObject)
+        const baseCommit = githubObject(listed.find((branch) => branch.name === repo.defaultBranch)?.commit ?? {})
+        const baseSha = typeof baseCommit.sha === 'string' ? baseCommit.sha : ''
+        const names = listed.map((value) => githubText(value.name)).filter((name) => name !== repo.defaultBranch)
         await mapLimited(names, async (name): Promise<GitHubBranch | null> => {
           try {
             const comparison = `${encodeURIComponent(repo.defaultBranch)}...${encodeURIComponent(name)}`
-            const result = githubObject(await githubRequest(`${path}/compare/${comparison}?per_page=1`, token, signal))
+            const headCommit = githubObject(listed.find((branch) => branch.name === name)?.commit ?? {})
+            const headSha = typeof headCommit.sha === 'string' ? headCommit.sha : ''
+            const stable = /^[a-f0-9]{40}$/i.test(baseSha) && /^[a-f0-9]{40}$/i.test(headSha) ? `${baseSha}...${headSha}` : comparison
+            const result = githubObject(await githubRequest(`${path}/compare/${stable}?per_page=1`, token, signal))
             const ahead = githubNumber(result.ahead_by)
             if (!ahead) return null
             const pull = repoPulls.find((item) => item.headRepository === repo.name && item.head === name)
@@ -112,10 +114,6 @@ export async function loadGitHubActivity(repositories: GitHubRepository[], token
   }
 }
 
-export function saveGitHubRepositories(binding: GitHubBinding, repositories: GitHubRepository[]): void {
-  saveGitHubBindingData({ ...binding, repositories })
-}
-
 /** Repository choices are kept separately from the account binding for compatibility. */
 export function readGitHubSelection(login: string): number[] | null {
   try {
@@ -130,35 +128,28 @@ export function saveGitHubSelection(login: string, ids: number[]): void {
   localStorage.setItem(`task-set:github:${login}`, JSON.stringify(ids))
 }
 
-/** Invalid or inaccessible storage is reported rather than silently losing the binding. */
-export function readGitHubBinding(): GitHubBinding | null {
-  const value = readGitHubBindingData()
-  if (value === null) return null
-  const binding = githubObject(value)
-  const login = githubText(binding.login)
-  const token = githubText(binding.token)
-  if (!/^[a-z\d](?:[a-z\d-]*[a-z\d])?$/i.test(login) || !Array.isArray(binding.repositories)) throw new Error('The saved GitHub binding is unreadable.')
-  const repositories = binding.repositories.map((value) => {
-    const repo = githubObject(value)
-    return parseRepository({ id: repo.id, full_name: repo.name, default_branch: repo.defaultBranch })
-  })
-  return { login, token, repositories }
-}
-
 export function assertGitHubAccount(login: string, boundLogin: string): void {
   if (login.toLowerCase() !== boundLogin.toLowerCase()) throw new Error(`GitHub is bound to ${boundLogin}. Use a token for that account.`)
-}
-
-export async function bindGitHub(token: string, signal: AbortSignal): Promise<GitHubBinding> {
-  const connection = await connectGitHub(token.trim(), signal)
-  signal.throwIfAborted()
-  const saved = readGitHubBinding()
-  if (saved) assertGitHubAccount(connection.login, saved.login)
-  const binding = { ...connection, token: token.trim() }
-  saveGitHubBindingData(binding)
-  return binding
 }
 
 export function isGitHubAuthenticationError(error: unknown): boolean {
   return error instanceof GitHubAuthenticationError
 }
+
+/** The server verifies its secret token belongs to the configured owner; no token reaches the browser. */
+export async function connectOwnerGitHub(signal: AbortSignal): Promise<GitHubBinding> {
+  const user = githubObject(await githubRequest('/user', '', signal))
+  const login = githubText(user.login)
+  assertGitHubAccount(login, GITHUB_OWNER)
+  return { login, repositories: await discoverGitHubRepositories('', signal) }
+}
+export function restoreGitHubActivity(login: string, ids: number[]) { return readGitHubSnapshot(login, ids) }
+export function saveGitHubActivity(login: string, ids: number[], activity: GitHubActivity) { cacheGitHubSnapshot(login, ids, activity) }
+export function readOwnerGitHubBinding(): GitHubBinding | null {
+  try {
+    const saved = githubObject(readOwnerGitHubData())
+    if (saved.login !== GITHUB_OWNER || !Array.isArray(saved.repositories)) return null
+    return { login: GITHUB_OWNER, repositories: saved.repositories.map((value) => { const repo = githubObject(value); return parseRepository({ id: repo.id, full_name: repo.name, default_branch: repo.defaultBranch }) }) }
+  } catch { return null }
+}
+export function saveOwnerGitHubBinding(binding: GitHubBinding) { saveOwnerGitHubData(binding) }

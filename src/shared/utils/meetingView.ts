@@ -91,6 +91,16 @@ export function meetingSections(meetings: Meeting[], notes: MeetingNote[], today
   return sections.filter((section) => section.items.length)
 }
 
+/** One-off meetings and the most recent occurrence of each recurring meeting before today. */
+export function previousMeetingSections(meetings: Meeting[], notes: MeetingNote[], today: string): MeetingSection[] {
+  const count = noteCounter(notes)
+  const items = meetings.flatMap((meeting): MeetingSummary[] => {
+    const date = adjacentMeetingDate(meeting, today, -1)
+    return date ? [{ meeting, date, upcoming: false, noteCount: count(meeting.id, date) }] : []
+  }).sort((a, b) => byWhen(b, a))
+  return items.length ? [{ id: 'past', label: 'Previous meetings', items }] : []
+}
+
 /** One meeting's day and notes. With no day picked, it shows the next meeting. */
 export function meetingDetail(meeting: Meeting, notes: MeetingNote[], picked: string | null, today: string): MeetingDetail {
   const next = nextMeetingDate(meeting, today)

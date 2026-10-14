@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import type { CalendarItem } from '../../../shared/utils/calendarView'
 import { addDays, longDayLabel } from '../../../shared/utils/dates'
 
@@ -9,6 +9,7 @@ const KEY_STEPS: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowU
 
 /** A day is narrow, so it names each item; the agenda below adds times. */
 function previewText(item: CalendarItem): string {
+  if (item.kind === 'holiday') return item.holiday.name
   if (item.kind === 'event') return item.event.text
   if (item.kind === 'meeting') return item.meeting.title
   return item.task.title
@@ -33,6 +34,7 @@ export default function CalendarMonth({
   onSelect,
   onShowMonth,
   onShowToday,
+  onJump,
 }: {
   monthLabel: string
   weekdays: string[]
@@ -43,10 +45,13 @@ export default function CalendarMonth({
   onSelect: (date: string, focusComposer: boolean) => void
   onShowMonth: (step: 1 | -1) => void
   onShowToday: () => void
+  onJump: (date: string) => void
 }) {
   const gridRef = useRef<HTMLDivElement>(null)
   const movedByKey = useRef(false)
   const month = selected.slice(0, 7)
+  const [year, setYear] = useState(month.slice(0, 4))
+  useEffect(() => setYear(month.slice(0, 4)), [month])
 
   // After an arrow key, focus follows the selection, which may be in a newly shown month.
   useEffect(() => {
@@ -73,6 +78,12 @@ export default function CalendarMonth({
         <h2 id="calendar-month" className="calendar-month" aria-live="polite">
           {monthLabel}
         </h2>
+        <div className="calendar-jump">
+          <label className="sr-only" htmlFor="jump-month">Month</label>
+          <select id="jump-month" className="text-field" value={month.slice(5)} onChange={(event) => onJump(`${month.slice(0, 4)}-${event.target.value}-01`)}>{Array.from({ length: 12 }, (_, index) => <option key={index} value={String(index + 1).padStart(2, '0')}>{new Intl.DateTimeFormat('en-NZ', { month: 'long' }).format(new Date(2026, index, 1))}</option>)}</select>
+          <label className="sr-only" htmlFor="jump-year">Year</label>
+          <input id="jump-year" className="text-field" type="number" min="1900" max="9999" value={year} onBlur={() => setYear(month.slice(0, 4))} onChange={(event) => { const value = event.target.value; setYear(value); if (/^\d{4}$/.test(value) && Number(value) >= 1900) onJump(`${value}-${month.slice(5)}-01`) }} />
+        </div>
         <button className="button button-secondary button-small" type="button" onClick={onShowToday} disabled={selected === today}>
           Today
         </button>

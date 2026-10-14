@@ -61,6 +61,7 @@ export default function NavigationRail({
         </div>
       </aside>
       {open && <div className="rail-scrim" onClick={onClose} aria-hidden="true" />}
+      <div className="mobile-navigation" inert={open}><ViewNavigation section={section} counts={counts} onSelect={onSelect} /></div>
     </>
   )
 }

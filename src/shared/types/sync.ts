@@ -1,8 +1,11 @@
 import type { CalendarEvent } from './calendar'
 import type { Meeting, MeetingNote } from './meeting'
 import type { Capture, Task } from './task'
+import type { MapCategory, MapPin } from './map'
 
 export type SyncRecord =
+  | { type: 'mapCategory'; value: MapCategory }
+  | { type: 'mapPin'; value: MapPin }
   | { type: 'capture'; value: Capture }
   | { type: 'task'; value: Task }
   | { type: 'event'; value: CalendarEvent }
@@ -11,6 +14,8 @@ export type SyncRecord =
 
 /** Every record on this device that has not been deleted, oldest first. */
 export interface WorkspaceData {
+  mapCategories: MapCategory[]
+  mapPins: MapPin[]
   captures: Capture[]
   tasks: Task[]
   events: CalendarEvent[]

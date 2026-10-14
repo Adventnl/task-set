@@ -4,10 +4,11 @@ import { isOverdue, whenLabel } from '../../../shared/utils/taskView'
 
 /** Due date and reminder, each with an icon and words so neither relies on color. */
 export default function TaskMeta({ task }: { task: Task }) {
-  if (!task.dueAt && !task.reminderAt) return null
+  if (!task.dueAt && !task.reminderAt && !task.tags?.length) return null
   const overdue = isOverdue(task)
   return (
     <span className="task-meta">
+      {task.tags?.map((tag) => <span className="task-tag" key={tag}>#{tag}</span>)}
       {task.dueAt && (
         <span className={overdue ? 'task-meta-overdue' : undefined}>
           <CalendarClock size={13} aria-hidden="true" />

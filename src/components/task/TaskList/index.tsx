@@ -24,7 +24,7 @@ export default function TaskList({
     return (
       <div className="empty-state">
         <h2>Nothing to do</h2>
-        <p>Choose Generate tasks or Make task from a note’s ⋯ menu, or confirm a voice note’s suggestions. Completing a task moves it to the Archive.</p>
+        <p>Write a task below. You can also make tasks from Notes. Completing a task moves it to the Archive.</p>
       </div>
     )
   }

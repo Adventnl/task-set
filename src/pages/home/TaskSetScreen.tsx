@@ -1,5 +1,4 @@
 import { Pencil, Plus } from 'lucide-react'
-import { useRef } from 'react'
 import ConfirmDialog from '../../components/app/ConfirmDialog'
 import NavigationRail from '../../components/app/NavigationRail'
 import Notice from '../../components/app/Notice'
@@ -29,6 +28,8 @@ import { COMING_UP_COUNT } from '../../shared/utils/calendarView'
 import CalendarScreen from './CalendarScreen'
 import MeetingsScreen from './MeetingsScreen'
 import GitHubScreen from './GitHubScreen'
+import MapScreen from './MapScreen'
+import { useMapView } from '../../shared/hooks/useMapView'
 
 const TASKS_PANEL = 'tasks-panel'
 
@@ -37,16 +38,19 @@ export default function TaskSetScreen() {
   const installer = useInstallPrompt()
   const data = useTaskSet()
   const keepAwake = useKeepAwake(data.sync.status !== 'signed-out')
-  const schedule = useSchedule(data)
   const ui = useWorkspaceView(data.workspace)
+  const schedule = useSchedule(data, ui.calendar.select)
+  const map = useMapView(data, ui.view === 'map' && !data.loading && data.sync.status !== 'signed-out')
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
   const send = (text: string, kind: Capture['kind']) => {
     const { target } = ui.composer
     if (target.kind === 'note') ui.showFeed()
-    return schedule.send(target, text, kind)
+    return Promise.resolve().then(() => schedule.send(target, text, kind)).catch((cause: unknown) => {
+      data.setNotice(cause instanceof Error ? cause.message : 'Could not save. Your words are still in the box.')
+      return false
+    })
   }
   const dictation = useDictation((text) => void send(text, 'voice'))
 
@@ -59,7 +63,7 @@ export default function TaskSetScreen() {
   const confirmDeleteTask = (task: Task) =>
     ui.setConfirmation({
       title: 'Delete this task?',
-      message: 'It is deleted for good. The note it came from stays in Notes.',
+      message: task.captureId ? 'It is deleted for good. The note it came from stays in Notes.' : 'It is deleted for good on every device.',
       confirmLabel: 'Delete task',
       onConfirm: () => data.deleteTask(task),
     })
@@ -85,7 +89,7 @@ export default function TaskSetScreen() {
     onDismissSuggestion: (task) => void data.reviewSuggestion(task, 'dismiss'),
     onToggleSelected: (capture) => ui.toggleSelected(capture.id),
   }
-  const counts = { ...ui.counts, github: github.activity?.pulls.length ?? 0 }
+  const counts = { ...ui.counts, github: github.activity?.pulls.length ?? 0, map: data.workspace.mapPins.length }
   const editor = ui.editor
   const openMeeting = ui.view === 'meetings' ? ui.meetings.meeting : null
   const headerAction: HeaderAction | undefined =
@@ -98,6 +102,8 @@ export default function TaskSetScreen() {
 
   function content() {
     switch (ui.view) {
+      case 'map':
+        return <MapScreen map={map} confirm={ui.setConfirmation} />
       case 'github':
         return <GitHubScreen github={github} />
       case 'feed':
@@ -107,7 +113,7 @@ export default function TaskSetScreen() {
             tasksByCapture={ui.feed.tasksByCapture}
             search={ui.search.trim()}
             selectedIds={ui.selecting ? ui.selectedIds : null}
-            scrollRef={scrollRef}
+            scrollRef={ui.scrollRef}
             actions={actions}
           />
         )
@@ -193,7 +199,7 @@ export default function TaskSetScreen() {
           <Tabs label="Tasks" tabs={ui.taskTabs} selected={ui.view === 'archive' ? 'archive' : 'tasks'} panelId={TASKS_PANEL} onSelect={ui.selectView} />
         )}
         {upcoming.length > 0 && <ComingUp items={upcoming} onOpen={ui.openCalendarDay} />}
-        <div className="workspace-scroll" ref={scrollRef}>
+        <div className="workspace-scroll" ref={ui.scrollRef}>
           <div className="column">
             {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
             {!data.loading && content()}
@@ -225,7 +231,8 @@ export default function TaskSetScreen() {
             dictation={dictation}
             placeholder={ui.composer.placeholder}
             label={ui.composer.label}
-            hidden={ui.selecting || ui.view === 'github'}
+            draftKey={ui.view === 'meetings' ? `meeting:${openMeeting?.id ?? 'list'}:${ui.meetings.detail?.date ?? ''}` : ui.section === 'calendar' ? `calendar:${ui.calendar.selected}` : ui.section}
+            hidden={ui.selecting || ui.view === 'github' || ui.view === 'map'}
             onSend={(text) => send(text, 'text')}
           />
         </div>

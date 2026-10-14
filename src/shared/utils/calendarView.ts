@@ -4,9 +4,12 @@ import type { Task } from '../types/task'
 import { addDays, addMonths, dateKey, daysBetween, localDate, monthStart, timeKey, weekdayOf } from './dates'
 import { meetingDates, noteCounter } from './meetingView'
 import { isOpenTask, taskWhen } from './taskView'
+import { isDateKey } from './dates'
+import { nzHolidays, type Holiday, type NzRegion } from './nzHolidays'
 
 /** Something shown on a calendar day. `id` is unique within the day. */
 export type CalendarItem =
+  | { kind: 'holiday'; id: string; holiday: Holiday }
   | { kind: 'event'; id: string; event: CalendarEvent }
   | { kind: 'meeting'; id: string; meeting: Meeting; date: string; noteCount: number }
   | { kind: 'task'; id: string; task: Task }
@@ -60,6 +63,7 @@ export function monthWeeks(date: string, weekStart: number): string[][] {
 
 /** Events first, since they take the whole day; then meetings and tasks by time. */
 function dayOrder(item: CalendarItem): string {
+  if (item.kind === 'holiday') return '0'
   if (item.kind === 'event') return '0'
   if (item.kind === 'meeting') return item.meeting.time ? `2${item.meeting.time}` : '1'
   return `2${timeKey(taskWhen(item.task) ?? '')}`
@@ -70,6 +74,7 @@ export function calendarItems(
   data: { events: CalendarEvent[]; meetings: Meeting[]; meetingNotes: MeetingNote[]; tasks: Task[] },
   start: string,
   end: string,
+  region?: NzRegion | null,
 ): Map<string, CalendarItem[]> {
   const byDate = new Map<string, CalendarItem[]>()
   const add = (date: string, item: CalendarItem) => {
@@ -78,7 +83,14 @@ export function calendarItems(
     items.push(item)
     byDate.set(date, items)
   }
-  for (const event of data.events) add(event.date, { kind: 'event', id: event.id, event })
+  for (const event of data.events) {
+    for (const date of eventDates(event, start, end)) add(date, { kind: 'event', id: event.id, event })
+  }
+  if (region !== undefined) {
+    for (let year = Number(start.slice(0, 4)); year <= Number(end.slice(0, 4)); year++) {
+      for (const holiday of nzHolidays(year, region)) add(holiday.date, { kind: 'holiday', id: `holiday:${holiday.date}:${holiday.name}`, holiday })
+    }
+  }
   const noteCount = noteCounter(data.meetingNotes)
   for (const meeting of data.meetings) {
     for (const date of meetingDates(meeting, start, end)) {
@@ -96,7 +108,21 @@ export function calendarItems(
 /** Events from today on, soonest first. */
 export function upcomingEvents(events: CalendarEvent[], today: string): UpcomingEvent[] {
   return events
-    .filter((event) => event.date >= today)
-    .map((event) => ({ event, days: daysBetween(today, event.date) }))
+    .map((event) => {
+      const date = eventDates(event, today, addMonths(today, 48))[0]
+      return date ? { event: { ...event, date }, days: daysBetween(today, date) } : null
+    })
+    .filter((item): item is UpcomingEvent => item !== null)
     .sort((a, b) => a.days - b.days)
+}
+
+/** Leap-day birthdays keep 29 February and recur only in leap years. */
+export function eventDates(event: CalendarEvent, start: string, end: string): string[] {
+  if (event.repeat !== 'yearly') return event.date >= start && event.date <= end ? [event.date] : []
+  const dates: string[] = []
+  for (let year = Number(start.slice(0, 4)); year <= Number(end.slice(0, 4)); year++) {
+    const date = `${year}${event.date.slice(4)}`
+    if (date >= event.date && date >= start && date <= end && isDateKey(date)) dates.push(date)
+  }
+  return dates
 }

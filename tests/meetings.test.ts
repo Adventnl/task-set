@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Meeting, MeetingNote } from '../src/shared/types/meeting'
-import { adjacentMeetingDate, meetingDates, meetingDetail, meetingSections, nextMeetingDate } from '../src/shared/utils/meetingView'
+import { adjacentMeetingDate, meetingDates, meetingDetail, meetingSections, nextMeetingDate, previousMeetingSections } from '../src/shared/utils/meetingView'
 
 const stamp = '2026-09-01T00:00:00.000Z'
 const meeting = (overrides: Partial<Meeting> = {}): Meeting => ({
@@ -25,6 +25,11 @@ const note = (id: string, date: string, meetingId = 'weekly'): MeetingNote => ({
 })
 
 describe('meeting days', () => {
+  it('includes the previous occurrence of weekly meetings with that day’s notes', () => {
+    const previous = previousMeetingSections([meeting(), meeting({ id: 'future', date: '2027-01-01', repeat: null })], [note('past-note', '2026-09-21')], '2026-09-28')
+    expect(previous[0].items).toHaveLength(1)
+    expect(previous[0].items[0]).toMatchObject({ date: '2026-09-21', noteCount: 1, upcoming: false })
+  })
   const weekly = meeting()
   const once = meeting({ id: 'once', date: '2026-10-02', repeat: null })
 

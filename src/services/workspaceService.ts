@@ -32,7 +32,7 @@ export function deleteCaptures(captures: Capture[], tasks: Task[]): Promise<Sync
   const ids = new Set(captures.map((capture) => capture.id))
   return saveLocal([
     ...captures.map((capture): SyncRecord => ({ type: 'capture', value: markDeleted(capture, now) })),
-    ...tasks.filter((task) => ids.has(task.captureId)).map((task) => taskRecord(markDeleted(task, now))),
+    ...tasks.filter((task) => task.captureId && ids.has(task.captureId)).map((task) => taskRecord(markDeleted(task, now))),
   ])
 }
 

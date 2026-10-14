@@ -36,7 +36,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      for (const name of await caches.keys()) if (name !== CACHE) await caches.delete(name)
+      for (const name of await caches.keys()) if (name.startsWith('task-set-shell-') && name !== CACHE) await caches.delete(name)
       await self.clients.claim()
     })(),
   )

@@ -141,6 +141,8 @@ export function viewDetail(view: View, counts: ViewCounts): string {
   switch (view) {
     case 'github':
       return 'Pull requests and branches across your repositories'
+    case 'map':
+      return 'Your places, organised by category'
     case 'archive':
       return `Completed tasks stay here for ${ARCHIVE_DAYS} days`
     case 'tasks':
@@ -159,6 +161,7 @@ export function viewDetail(view: View, counts: ViewCounts): string {
 export function selectCaptureData(captures: Capture[], tasks: Task[], search: string) {
   const tasksByCapture = new Map<string, Task[]>()
   for (const task of tasks) {
+    if (!task.captureId) continue
     if (task.suggestionStatus === 'dismissed' || task.completedAt) continue
     const linked = tasksByCapture.get(task.captureId) ?? []
     linked.push(task)

@@ -4,6 +4,7 @@ import { parseSyncRecord } from '../src/shared/utils/records'
 import { authConfigured, clearSessionCookie, createSessionCookie, hasSession, passcodeMatches } from './auth'
 import { json, readBody, readJson } from './http'
 import type { TaskSpace } from './taskSpace'
+import { githubProxy, type GitHubEnv } from './github'
 
 export { TaskSpace } from './taskSpace'
 
@@ -87,6 +88,8 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       return push(request, space)
     case 'GET /api/live':
       return space.fetch(request)
+    case 'GET /api/github':
+      return githubProxy(request, env as Env & GitHubEnv)
     case 'POST /api/ai/transcribe': {
       const { success } = await env.AI_RATE_LIMIT.limit({ key: 'transcribe' })
       return success ? transcribe(request, env) : json({ error: 'Too many voice notes at once. Try again in a minute.' }, 429)

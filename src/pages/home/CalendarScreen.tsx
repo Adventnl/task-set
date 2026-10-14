@@ -5,6 +5,7 @@ import type { useCalendarView } from '../../shared/hooks/useCalendarView'
 import type { Confirmation } from '../../shared/hooks/useWorkspaceView'
 import type { CalendarEvent, EventInput } from '../../shared/types/calendar'
 import type { Task } from '../../shared/types/task'
+import { NZ_REGIONS, type NzRegion } from '../../shared/utils/nzHolidays'
 
 /** The Calendar view: the month, the selected day, and the event editor. The composer adds to the selected day. */
 export default function CalendarScreen({
@@ -32,6 +33,12 @@ export default function CalendarScreen({
 
   return (
     <>
+      <div className="region-controls">
+        <label htmlFor="anniversary-region">NZ anniversary region</label>
+        <select id="anniversary-region" className="text-field" value={calendar.region.region ?? ''} onChange={(event) => calendar.region.choose(event.target.value as NzRegion || null)}><option value="">National holidays only</option>{NZ_REGIONS.map((region) => <option key={region}>{region}</option>)}</select>
+        <button className="button button-secondary" type="button" disabled={calendar.region.busy} onClick={() => void calendar.region.detect()}>{calendar.region.busy ? 'Locating…' : 'Use my location'}</button>
+      </div>
+      {calendar.region.error && <p className="form-error" role="alert">{calendar.region.error}</p>}
       <CalendarMonth
         monthLabel={calendar.monthLabel}
         weekdays={calendar.weekdays}
@@ -45,7 +52,9 @@ export default function CalendarScreen({
         }}
         onShowMonth={calendar.showMonth}
         onShowToday={calendar.showToday}
+        onJump={calendar.select}
       />
+      <p className="modal-note">Write a date below, e.g. “Dinner on December 22nd”, or choose a day. Birthday entries repeat yearly.</p>
       <DayAgenda
         date={calendar.selected}
         today={today}

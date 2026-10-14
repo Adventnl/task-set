@@ -37,6 +37,5 @@ export interface GitHubActivity {
 
 export interface GitHubBinding {
   login: string
-  token: string
   repositories: GitHubRepository[]
 }

@@ -35,6 +35,7 @@ export default function Composer({
   placeholder,
   label,
   hidden = false,
+  draftKey,
   onSend,
 }: {
   inputRef: RefObject<HTMLTextAreaElement | null>
@@ -42,9 +43,12 @@ export default function Composer({
   placeholder: string
   label: string
   hidden?: boolean
+  draftKey: string
   onSend: (text: string) => Promise<boolean>
 }) {
-  const [draft, setDraft] = useState('')
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const draft = drafts[draftKey] ?? ''
+  const setDraft = (value: string | ((current: string) => string)) => setDrafts((current) => ({ ...current, [draftKey]: typeof value === 'function' ? value(current[draftKey] ?? '') : value }))
   const [mode, setMode] = useState<Mode>('keyboard')
   const [cancelling, setCancelling] = useState(false)
   const talking = dictation.phase !== 'idle'
@@ -53,6 +57,7 @@ export default function Composer({
   useEffect(() => {
     if (hidden) cancel()
   }, [hidden, cancel])
+  useEffect(() => () => cancel(), [draftKey, cancel])
 
   useLayoutEffect(() => {
     const input = inputRef.current

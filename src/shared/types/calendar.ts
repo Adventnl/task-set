@@ -7,6 +7,8 @@ export interface CalendarEvent {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  repeat?: 'yearly' | null
+  category?: 'birthday' | null
 }
 
-export type EventInput = Pick<CalendarEvent, 'date' | 'text'>
+export type EventInput = Pick<CalendarEvent, 'date' | 'text' | 'repeat' | 'category'>

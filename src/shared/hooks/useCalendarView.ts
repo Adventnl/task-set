@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react'
 import type { WorkspaceData } from '../types/sync'
 import { calendarItems, firstDayOfWeek, monthLabel, monthWeeks, upcomingEvents, weekdayLabels } from '../utils/calendarView'
 import { addMonths, monthStart } from '../utils/dates'
+import { useNzRegion } from './useNzRegion'
 
 /**
  * The calendar's selected day, the month around it, and what is on each day. With no day picked,
  * the selection follows today, so it rolls over at midnight.
  */
 export function useCalendarView({ events, meetings, meetingNotes, tasks }: WorkspaceData, today: string) {
+  const region = useNzRegion()
   const [picked, setPicked] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const selected = picked ?? today
@@ -16,8 +18,8 @@ export function useCalendarView({ events, meetings, meetingNotes, tasks }: Works
   const weekdays = useMemo(() => weekdayLabels(weekStart), [weekStart])
   const weeks = useMemo(() => monthWeeks(month, weekStart), [month, weekStart])
   const items = useMemo(
-    () => calendarItems({ events, meetings, meetingNotes, tasks }, weeks[0][0], weeks[weeks.length - 1][6]),
-    [events, meetings, meetingNotes, tasks, weeks],
+    () => calendarItems({ events, meetings, meetingNotes, tasks }, weeks[0][0], weeks[weeks.length - 1][6], region.region),
+    [events, meetings, meetingNotes, tasks, weeks, region.region],
   )
   const upcoming = useMemo(() => upcomingEvents(events, today), [events, today])
 
@@ -30,6 +32,7 @@ export function useCalendarView({ events, meetings, meetingNotes, tasks }: Works
   }
 
   return {
+    region,
     selected,
     monthLabel: monthLabel(month),
     weekdays,

@@ -1,8 +1,10 @@
 import { Check, Copy, Ellipsis, ListTodo, Mic, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Capture, Task } from '../../../shared/types/task'
 import { plural, timeLabel } from '../../../shared/utils/taskView'
 import CaptureTasks from '../CaptureTasks'
+const MENU_OPENED = 'task-set:note-actions-opened'
 
 export interface CaptureActions {
   onCopy: (capture: Capture) => void
@@ -28,6 +30,9 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
   actions: CaptureActions
 }) {
   const [open, setOpen] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const menu = useRef<HTMLDivElement>(null)
   const row = useRef<HTMLElement>(null)
   const more = useRef<HTMLButtonElement>(null)
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -46,30 +51,56 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
 
   function choose(action: (capture: Capture) => void) {
     setOpen(false)
+    more.current?.focus({ preventScroll: true })
     action(capture)
   }
 
   useEffect(() => cancelHold, [])
   useEffect(() => {
+    if (!hovered || selecting) return
+    const shift = (event: KeyboardEvent) => { if (event.key === 'Shift') setOpen(true) }
+    window.addEventListener('keydown', shift)
+    return () => window.removeEventListener('keydown', shift)
+  }, [hovered, selecting])
+  useLayoutEffect(() => {
+    if (!open || !more.current || !menu.current) return
+    const anchor = more.current.getBoundingClientRect()
+    const bounds = menu.current.getBoundingClientRect()
+    const bottom = Math.min(window.innerHeight, row.current?.closest('.workspace-scroll')?.getBoundingClientRect().bottom ?? window.innerHeight)
+    const top = anchor.top + bounds.height <= bottom ? anchor.top : anchor.bottom - bounds.height
+    setPosition({ top: Math.max(8, Math.min(top, window.innerHeight - bounds.height - 8)), left: Math.max(8, Math.min(anchor.left - bounds.width - 4, window.innerWidth - bounds.width - 8)) })
+    if (document.activeElement === more.current) menu.current.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
+  }, [open])
+  useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !row.current?.contains(event.target)) setOpen(false)
+      if (event.target instanceof Node && !row.current?.contains(event.target) && !menu.current?.contains(event.target)) setOpen(false)
     }
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { setOpen(false); more.current?.focus() }
     }
+    const anotherMenu = (event: Event) => { if (event instanceof CustomEvent && event.detail !== capture.id) setOpen(false) }
     document.addEventListener('pointerdown', outside)
     document.addEventListener('keydown', escape)
+    document.addEventListener(MENU_OPENED, anotherMenu)
+    document.dispatchEvent(new CustomEvent(MENU_OPENED, { detail: capture.id }))
+    const dismiss = (event: Event) => { if (!(event.target instanceof Node && menu.current?.contains(event.target))) setOpen(false) }
+    window.addEventListener('resize', dismiss)
+    document.addEventListener('scroll', dismiss, true)
     return () => {
       document.removeEventListener('pointerdown', outside)
       document.removeEventListener('keydown', escape)
+      document.removeEventListener(MENU_OPENED, anotherMenu)
+      window.removeEventListener('resize', dismiss)
+      document.removeEventListener('scroll', dismiss, true)
     }
-  }, [open])
+  }, [open, capture.id])
 
   return (
     <article
       ref={row}
       className={`capture${selecting ? ' is-selectable' : ''}`}
+      onPointerEnter={(event) => { if (event.pointerType === 'mouse') { setHovered(true); if (event.shiftKey && !selecting) setOpen(true) } }}
       onClick={selecting ? () => actions.onToggleSelected(capture) : undefined}
       onPointerDown={(event) => {
         cancelHold()
@@ -82,12 +113,12 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
       }}
       onPointerUp={cancelHold}
       onPointerCancel={cancelHold}
-      onPointerLeave={cancelHold}
+      onPointerLeave={() => { cancelHold(); setHovered(false) }}
       onContextMenu={(event) => {
         if (!selecting) { event.preventDefault(); cancelHold(); setOpen(true) }
       }}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+        if (!event.currentTarget.contains(event.relatedTarget) && !menu.current?.contains(event.relatedTarget)) setOpen(false)
       }}
     >
       {selecting && (
@@ -118,9 +149,9 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
           <button ref={more} className="icon-button capture-more" type="button" aria-expanded={open} aria-controls={menuId} aria-label="Note actions" onClick={() => setOpen((value) => !value)}>
             <Ellipsis size={17} />
           </button>
-          {open && (
-            <div className="capture-actions" id={menuId} role="group" aria-label="Note actions">
-              <button className="button button-quiet" type="button" autoFocus onClick={() => choose(actions.onCopy)}>
+          {open && createPortal(
+            <div ref={menu} className="capture-actions" style={position} id={menuId} role="group" aria-label="Note actions" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && !row.current?.contains(event.relatedTarget)) setOpen(false) }}>
+              <button className="button button-quiet" type="button" onClick={() => choose(actions.onCopy)}>
                 <Copy size={15} aria-hidden="true" /> Copy
               </button>
               <button className="button button-quiet" type="button" disabled={capture.ai === 'queued'} onClick={() => choose(actions.onGenerateTasks)}>
@@ -133,7 +164,7 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
                 <Trash2 size={15} aria-hidden="true" /> Delete
               </button>
             </div>
-          )}
+          , document.body)}
         </div>
       )}
     </article>

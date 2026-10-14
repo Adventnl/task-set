@@ -1,4 +1,4 @@
-import { CalendarDays, GitPullRequest, ListTodo, NotebookText, Users, type LucideIcon } from 'lucide-react'
+import { CalendarDays, GitPullRequest, ListTodo, MapPin, NotebookText, Users, type LucideIcon } from 'lucide-react'
 import { VIEW_LABELS, type Section } from '../../../shared/config/views'
 
 const items: { id: Section; icon: LucideIcon; countLabel: string }[] = [
@@ -7,6 +7,7 @@ const items: { id: Section; icon: LucideIcon; countLabel: string }[] = [
   { id: 'calendar', icon: CalendarDays, countLabel: 'coming up' },
   { id: 'meetings', icon: Users, countLabel: 'meetings' },
   { id: 'github', icon: GitPullRequest, countLabel: 'open PRs' },
+  { id: 'map', icon: MapPin, countLabel: 'places' },
 ]
 
 /** The workspace sections, listed in the sidebar (a drawer on phones). */

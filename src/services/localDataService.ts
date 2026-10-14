@@ -2,10 +2,11 @@ import type { CalendarEvent } from '../shared/types/calendar'
 import type { Meeting, MeetingNote } from '../shared/types/meeting'
 import type { SyncRecord, WorkspaceData } from '../shared/types/sync'
 import type { Capture, Task } from '../shared/types/task'
+import type { MapCategory, MapPin } from '../shared/types/map'
 import { byCreatedAt, recordKey } from '../shared/utils/records'
 
 const DATABASE_NAME = 'task-set'
-const DATABASE_VERSION = 3
+const DATABASE_VERSION = 4
 const CAPTURES = 'captures'
 const TASKS = 'tasks'
 const OUTBOX = 'outbox'
@@ -14,6 +15,8 @@ const CURSOR_KEY = 'cursor'
 
 /** One object store per record type, named after its list in `WorkspaceData`. */
 const STORES = {
+  mapCategory: 'mapCategories',
+  mapPin: 'mapPins',
   capture: CAPTURES,
   task: TASKS,
   event: 'events',
@@ -117,7 +120,7 @@ export async function loadData(): Promise<WorkspaceData> {
   const database = await openDatabase()
   const transaction = database.transaction(RECORD_STORES, 'readonly')
   // Each list is read once the transaction completes; deletions never reach the screen.
-  const read = <T extends Capture | Task | CalendarEvent | Meeting | MeetingNote>(name: string) => {
+  const read = <T extends Capture | Task | CalendarEvent | Meeting | MeetingNote | MapCategory | MapPin>(name: string) => {
     const request = transaction.objectStore(name).getAll()
     return () => (request.result as T[]).filter((item) => !item.deletedAt).sort(byCreatedAt)
   }
@@ -126,8 +129,10 @@ export async function loadData(): Promise<WorkspaceData> {
   const events = read<CalendarEvent>(STORES.event)
   const meetings = read<Meeting>(STORES.meeting)
   const meetingNotes = read<MeetingNote>(STORES.meetingNote)
+  const mapCategories = read<MapCategory>(STORES.mapCategory)
+  const mapPins = read<MapPin>(STORES.mapPin)
   await complete(transaction)
-  return { captures: captures(), tasks: tasks(), events: events(), meetings: meetings(), meetingNotes: meetingNotes() }
+  return { captures: captures(), tasks: tasks(), events: events(), meetings: meetings(), meetingNotes: meetingNotes(), mapCategories: mapCategories(), mapPins: mapPins() }
 }
 
 /**

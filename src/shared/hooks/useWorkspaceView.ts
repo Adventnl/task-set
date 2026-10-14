@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { NARROW_SCREEN_QUERY, sectionOf, TASK_TAB_LABELS, VIEW_LABELS, type Section } from '../config/views'
 import type { WorkspaceData } from '../types/sync'
 import type { ComposerTarget, Editor, View } from '../types/task'
@@ -42,6 +42,7 @@ export function useWorkspaceView(data: WorkspaceData) {
   const navigationRef = useRef<HTMLButtonElement>(null)
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   // Changes only when the date does, so day labels, countdowns, and the Archive roll over after midnight.
   const [today, setToday] = useState(() => dateKey(new Date()))
   const calendar = useCalendarView(data, today)
@@ -148,11 +149,18 @@ export function useWorkspaceView(data: WorkspaceData) {
     calendar: calendar.upcoming.length,
     meetings: data.meetings.length,
     github: 0,
+    map: 0,
   }
   const shownMeeting = view === 'meetings' ? meetings.meeting : null
+  useLayoutEffect(() => {
+    // Notes owns its newest-message scrolling; other sections open at their controls.
+    if (view !== 'feed') scrollRef.current?.scrollTo({ top: 0 })
+  }, [view, shownMeeting?.id])
 
   /** On the calendar the composer adds to the selected day; in a meeting, to the day on screen. */
   function composerFor() {
+    if (view === 'tasks' || view === 'archive') return { target: { kind: 'task' } as ComposerTarget, placeholder: 'Write a task…', label: 'New task' }
+    if (view === 'meetings' && !shownMeeting) return { target: { kind: 'meeting', date: today } as ComposerTarget, placeholder: 'Add a meeting, e.g. Team catch-up on Thursday…', label: 'New meeting' }
     if (view === 'calendar') {
       const day = calendar.selected
       const target: ComposerTarget = { kind: 'event', date: day }
@@ -231,6 +239,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     setConfirmation,
     composerRef,
     searchRef,
+    scrollRef,
     feed,
     sections,
     suggestions: tasks.filter((task) => task.suggestionStatus === 'suggested'),

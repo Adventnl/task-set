@@ -147,7 +147,7 @@ export function useTaskSet() {
     await persist(() => workspace.saveTask(editor, input), editor.task ? 'Task saved' : 'Task created')
   }
 
-  const deleteTask = (task: Task) => commit(task.id, () => workspace.deleteTask(task), 'Task deleted; the note is kept', 'Could not delete that task. Try again.')
+  const deleteTask = (task: Task) => commit(task.id, () => workspace.deleteTask(task), task.captureId ? 'Task deleted; the note is kept' : 'Task deleted', 'Could not delete that task. Try again.')
 
   /** Starts copying before any await, while the browser still counts the tap as a user gesture. */
   async function copyCapture(capture: Capture) {

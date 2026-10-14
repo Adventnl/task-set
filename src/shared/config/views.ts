@@ -6,7 +6,7 @@ export type Section = Exclude<View, 'archive'>
 /** Matches the stylesheet's narrow-screen breakpoint, where the sidebar becomes a drawer. */
 export const NARROW_SCREEN_QUERY = '(max-width: 760px)'
 
-export const SECTIONS: readonly Section[] = ['feed', 'tasks', 'calendar', 'meetings', 'github']
+export const SECTIONS: readonly Section[] = ['feed', 'tasks', 'calendar', 'meetings', 'github', 'map']
 
 export const VIEW_LABELS: Record<View, string> = {
   feed: 'Notes',
@@ -15,6 +15,7 @@ export const VIEW_LABELS: Record<View, string> = {
   calendar: 'Calendar',
   meetings: 'Meetings',
   github: 'GitHub',
+  map: 'Map',
 }
 
 /** The tabs of the Tasks section. */

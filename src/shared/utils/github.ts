@@ -1,4 +1,4 @@
-import type { GitHubPullRequest, GitHubRepository } from '../types/github'
+import type { GitHubActivity, GitHubPullRequest, GitHubRepository } from '../types/github'
 
 export function githubObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('GitHub returned an unreadable response.')
@@ -65,4 +65,28 @@ export function checkSummary(statusValue: unknown, runs: unknown[]): string {
   if (count === 0 && checks.length === 0) return 'No checks reported'
   if (checks.some((run) => !['success', 'neutral', 'skipped'].includes(String(run.conclusion)))) return 'Checks unknown'
   return 'Checks passed'
+}
+
+/** Restores display models defensively and rebuilds their links, just as live adapters do. */
+export function parseGitHubActivity(value: unknown): GitHubActivity | null {
+  try {
+    const data = githubObject(value)
+    if (!Array.isArray(data.pulls) || !Array.isArray(data.branches) || !Array.isArray(data.warnings) || !data.warnings.every((warning) => typeof warning === 'string')) return null
+    const updatedAt = githubText(data.updatedAt)
+    if (!Number.isFinite(Date.parse(updatedAt))) return null
+    const pulls = data.pulls.map((item) => {
+      const pull = githubObject(item)
+      const model = parsePull({ number: pull.number, title: pull.title, draft: pull.draft, head: { ref: pull.head, repo: pull.headRepository ? { full_name: pull.headRepository } : null }, base: { ref: pull.base } }, githubText(pull.repository))
+      return { ...model, mergeStatus: githubText(pull.mergeStatus), checks: githubText(pull.checks) }
+    })
+    const branches = data.branches.map((item) => {
+      const branch = githubObject(item)
+      const repository = githubText(branch.repository), name = githubText(branch.name), base = githubText(branch.base)
+      const path = repositoryPath(repository)
+      const pullUrl = branch.pullUrl === null ? null : githubText(branch.pullUrl)
+      if (pullUrl && !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(pullUrl)) throw new Error('Invalid cached pull link.')
+      return { repository, name, base, ahead: githubNumber(branch.ahead), behind: githubNumber(branch.behind), pullUrl, compareUrl: `https://github.com/${path}/compare/${encodeURIComponent(base)}...${encodeURIComponent(name)}` }
+    })
+    return { pulls, branches, warnings: data.warnings as string[], updatedAt }
+  } catch { return null }
 }

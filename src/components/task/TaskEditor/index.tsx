@@ -4,6 +4,7 @@ import { MAX_TITLE_LENGTH } from '../../../shared/utils/records'
 import type { Capture, Editor, TaskInput } from '../../../shared/types/task'
 import { fromLocalInput, toLocalInput } from '../../../shared/utils/taskView'
 import Modal from '../../app/Modal'
+import { parseTags } from '../../../shared/utils/tags'
 
 function DateField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (value: string) => void }) {
   return (
@@ -42,6 +43,7 @@ export default function TaskEditor({
   const [dueAt, setDueAt] = useState(toLocalInput(task?.dueAt ?? null))
   const [reminderAt, setReminderAt] = useState(toLocalInput(task?.reminderAt ?? null))
   const [pinned, setPinned] = useState(task?.pinned ?? false)
+  const [tags, setTags] = useState(task?.tags?.join(', ') ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -51,7 +53,7 @@ export default function TaskEditor({
     setBusy(true)
     setError('')
     try {
-      await onSave({ title: title.trim(), dueAt: fromLocalInput(dueAt), reminderAt: fromLocalInput(reminderAt), pinned })
+      await onSave({ title: title.trim(), dueAt: fromLocalInput(dueAt), reminderAt: fromLocalInput(reminderAt), pinned, tags: parseTags(tags) })
       onClose()
     } catch {
       setError('Could not save on this device. Try again.')
@@ -87,6 +89,8 @@ export default function TaskEditor({
           <DateField id="task-due" label="Due" value={dueAt} onChange={setDueAt} />
           <DateField id="task-reminder" label="Reminder" value={reminderAt} onChange={setReminderAt} />
         </div>
+        <label className="field-label field-label-spaced" htmlFor="task-tags">Tags <span className="field-optional">(up to 5, separated by commas)</span></label>
+        <input id="task-tags" className="text-field" value={tags} maxLength={154} onChange={(event) => setTags(event.target.value)} placeholder="personal, work" />
         <label className="check-field">
           <input type="checkbox" checked={pinned} onChange={(event) => setPinned(event.target.checked)} />
           Pin to the top of Tasks

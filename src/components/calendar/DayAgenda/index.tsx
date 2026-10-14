@@ -46,7 +46,9 @@ export default function DayAgenda({
         <ul className="agenda-list">
           {items.map((item) => (
             <li key={item.id}>
-              {item.kind === 'event' ? (
+              {item.kind === 'holiday' ? (
+                <div className="agenda-row"><CalendarCheck className="agenda-icon" size={17} aria-hidden="true" /><span className="agenda-body"><span className="agenda-text">{item.holiday.name}</span><span className="agenda-meta">{item.holiday.public ? 'New Zealand public holiday' : 'Observance'}</span></span></div>
+              ) : item.kind === 'event' ? (
                 <button className="agenda-row agenda-event" type="button" onClick={() => onEditEvent(item.event.id)} aria-label={`Edit “${item.event.text}”`}>
                   <CalendarCheck className="agenda-icon" size={17} aria-hidden="true" />
                   <span className="agenda-text">{item.event.text}</span>
