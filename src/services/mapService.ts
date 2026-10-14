@@ -1,4 +1,5 @@
 import { searchPlaces } from '../connectors/locationConnector'
+import { GOOGLE_MAPS_KEY } from '../shared/config/maps'
 import type { MapCategory, MapPin, Place } from '../shared/types/map'
 import type { SyncRecord } from '../shared/types/sync'
 import { markDeleted, parseMapPin } from '../shared/utils/records'
@@ -21,8 +22,12 @@ export function deleteCategory(category: MapCategory, pins: MapPin[]): Promise<S
   const now = new Date().toISOString()
   return saveLocal([{ type: 'mapCategory', value: markDeleted(category, now) }, ...pins.filter((pin) => pin.categoryId === category.id).map((pin): SyncRecord => ({ type: 'mapPin', value: markDeleted(pin, now) }))])
 }
-export function findPlaces(query: string, signal: AbortSignal) { return searchPlaces(query, signal) }
-export async function createMap(element: HTMLElement, onPick: (place: Place) => void, onTileError: () => void) {
+export async function findPlaces(query: string, signal: AbortSignal) {
+  if (!GOOGLE_MAPS_KEY) return searchPlaces(query, signal)
   const renderer = await import('../connectors/mapRendererConnector')
-  return renderer.mountMap(element, onPick, onTileError)
+  return renderer.searchGooglePlaces(query, signal)
+}
+export async function createMap(element: HTMLElement, onPick: (place: Place) => void, onError: (message: string) => void) {
+  const renderer = await import('../connectors/mapRendererConnector')
+  return renderer.mountMap(element, onPick, onError)
 }

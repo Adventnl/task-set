@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as maps from '../../services/mapService'
-import type { MapPin, Place } from '../types/map'
+import type { MapPin, MapRenderer, Place } from '../types/map'
+import { GOOGLE_MAPS_KEY } from '../config/maps'
 import type { useTaskSet } from './useTaskSet'
 
 export function useMapView(data: ReturnType<typeof useTaskSet>, active: boolean) {
@@ -10,6 +11,10 @@ export function useMapView(data: ReturnType<typeof useTaskSet>, active: boolean)
   const [results, setResults] = useState<Place[]>([])
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState('')
+  const [mapError, setMapError] = useState('')
+  const [mapLoading, setMapLoading] = useState(true)
+  const [mapRevision, setMapRevision] = useState(0)
+  const mode: MapRenderer['mode'] = GOOGLE_MAPS_KEY ? 'interactive' : 'embed'
   const mapRef = useRef<HTMLDivElement>(null)
   const session = useRef<Awaited<ReturnType<typeof maps.createMap>> | null>(null)
   const request = useRef<AbortController | null>(null)
@@ -19,20 +24,26 @@ export function useMapView(data: ReturnType<typeof useTaskSet>, active: boolean)
   visibleRef.current = visible
   const categoriesRef = useRef(categories)
   categoriesRef.current = categories
+  const placeRef = useRef(place)
+  placeRef.current = place
 
   function pick(value: Place) { setPlace(value); setEditing('id' in value ? value as MapPin : null) }
   useEffect(() => {
     if (!active || !mapRef.current) return
     let alive = true
     let mounted: Awaited<ReturnType<typeof maps.createMap>> | null = null
-    void maps.createMap(mapRef.current, pick, () => { if (alive) setError('Map tiles could not load. Saved places are still available below.') }).then((renderer) => {
+    setMapLoading(true)
+    setMapError('')
+    void maps.createMap(mapRef.current, pick, (message) => { if (alive) setMapError(message) }).then((renderer) => {
       mounted = renderer
       if (!alive) { renderer.dispose(); return }
       session.current = renderer
       renderer.update(visibleRef.current, categoriesRef.current)
-    }).catch(() => { if (alive) setError('The map could not load. Try reopening Map.') })
-    return () => { alive = false; mounted?.dispose(); session.current = null; request.current?.abort() }
-  }, [active])
+      renderer.focus(placeRef.current)
+      setMapLoading(false)
+    }).catch(() => { if (alive) { setMapLoading(false); setMapError('Google Maps could not load. Your saved places are still available below.') } })
+    return () => { alive = false; mounted?.dispose(); session.current = null; request.current?.abort(); setSearching(false) }
+  }, [active, mapRevision])
   useEffect(() => { session.current?.update(visible, categories) }, [pins, categories, filter, active])
   useEffect(() => { session.current?.focus(place) }, [place])
   useEffect(() => {
@@ -41,7 +52,7 @@ export function useMapView(data: ReturnType<typeof useTaskSet>, active: boolean)
   }, [categories, pins, editing, filter])
   async function search(query: string) {
     request.current?.abort()
-    if (!query.trim()) { setResults([]); return }
+    if (!query.trim()) { setResults([]); setSearching(false); setError(''); return }
     const controller = new AbortController()
     request.current = controller
     setSearching(true); setError('')
@@ -51,6 +62,7 @@ export function useMapView(data: ReturnType<typeof useTaskSet>, active: boolean)
   }
   return {
     categories, pins: visible, filter, setFilter, mapRef, place, editing, pick, results, searching, error, search,
+    mode, mapLoading, mapError, retryMap: () => setMapRevision((value) => value + 1),
     colors: maps.MAP_COLORS,
     closePlace: () => { setPlace(null); setEditing(null) },
     createCategory: (name: string, color: string) => data.persist(() => maps.createCategory(name, color), 'Category added'),

@@ -814,10 +814,7 @@ legend {
 .map-categories [aria-pressed='true'] { background: var(--accent-soft); }
 .category-dot { width: var(--space-3); height: var(--space-3); border-radius: 50%; flex: none; }
 .map-canvas { height: min(55dvh, 440px); min-height: 260px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); overflow: hidden; isolation: isolate; }
-.map-canvas .leaflet-control-zoom a { width: var(--touch); height: var(--touch); line-height: var(--touch); }
-.map-pin-marker { background: transparent; border: 0; }
-.map-pin-glyph { display: block; width: var(--space-5); height: var(--space-5); border: 2px solid var(--surface); border-radius: 50% 50% 50% 0; background: var(--pin-color); transform: rotate(-45deg); box-shadow: var(--shadow-float); }
-.map-pin-glyph::after { content: ''; position: absolute; width: var(--space-2); height: var(--space-2); top: var(--space-2); left: var(--space-2); background: var(--surface); border-radius: 50%; }
+.map-canvas iframe { width: 100%; height: 100%; border: 0; display: block; }
 
 @media (max-width: 760px) {
   .workspace { padding-bottom: calc(var(--space-8) + var(--space-4) + env(safe-area-inset-bottom)); }
