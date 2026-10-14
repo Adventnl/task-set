@@ -2,7 +2,23 @@ import { describe, expect, it } from 'vitest'
 import type { CalendarEvent } from '../src/shared/types/calendar'
 import type { Meeting, MeetingNote } from '../src/shared/types/meeting'
 import type { Capture, Task } from '../src/shared/types/task'
-import { EMPTY_WORKSPACE, mergeRecords, parseCapture, parseEvent, parseMeeting, parseMeetingNote, parseSyncRecord, parseTask } from '../src/shared/utils/records'
+import {
+  EMPTY_WORKSPACE,
+  fitsInStorage,
+  MAX_PUSH_BYTES,
+  MAX_RECORD_BYTES,
+  MAX_TITLE_LENGTH,
+  mergeRecords,
+  parseCapture,
+  parseEvent,
+  parseMeeting,
+  parseMeetingNote,
+  parseSyncRecord,
+  parseTask,
+  RecordTooLargeError,
+  recordBytes,
+  takeWithinBytes,
+} from '../src/shared/utils/records'
 import { AUTOMATIC_BATCH, deletedRecord, mergeCapture, mergeRecord, mergeTask, parentOf, suggestionTask } from '../worker/merge'
 
 const capture: Capture = {
@@ -85,6 +101,19 @@ describe('record validation', () => {
     expect(parseSyncRecord({ type: 'meetingNote', value: note })).toEqual({ type: 'meetingNote', value: note })
   })
 
+  it('puts no length limit on notes, calendar entries, or meeting notes', () => {
+    const long = 'word '.repeat(200_000) // a million characters
+    expect(parseCapture({ ...capture, text: long })?.text).toBe(long)
+    expect(parseEvent({ ...event, text: long })?.text).toBe(long)
+    expect(parseMeetingNote({ ...note, text: long })?.text).toBe(long)
+    expect(parseSyncRecord({ type: 'capture', value: { ...capture, text: long } })).not.toBeNull()
+  })
+
+  it('keeps titles to one short line', () => {
+    expect(parseTask({ ...task, title: 'x'.repeat(MAX_TITLE_LENGTH) })).not.toBeNull()
+    expect(parseTask({ ...task, title: 'x'.repeat(MAX_TITLE_LENGTH + 1) })).toBeNull()
+  })
+
   it('rejects impossible days, times, and repeats', () => {
     expect(parseEvent({ ...event, date: '2026-02-30' })).toBeNull()
     expect(parseEvent({ ...event, text: ' ' })).toBeNull()
@@ -116,6 +145,70 @@ describe('record validation', () => {
     const next = mergeRecords(state, [{ type: 'event', value: { ...event, deletedAt: '2026-09-26T00:00:00.000Z' } }])
     expect(next.events).toEqual([])
     expect(next.meetings).toBe(state.meetings)
+  })
+})
+
+describe('record size', () => {
+  const capture$ = (text: string) => ({ type: 'capture' as const, value: { ...capture, text } })
+
+  it('measures a record as stored: JSON in UTF-8 bytes, so multi-byte text counts in full', () => {
+    const overhead = recordBytes(capture$(''))
+    expect(recordBytes(capture$('a'.repeat(10)))).toBe(overhead + 10)
+    expect(recordBytes(capture$('汉'.repeat(10)))).toBe(overhead + 30)
+    expect(recordBytes(capture$('\n'.repeat(10)))).toBe(overhead + 20) // a newline is two characters in JSON
+  })
+
+  it('accepts a record up to the storage limit and refuses one over it', () => {
+    const room = MAX_RECORD_BYTES - recordBytes(capture$(''))
+    expect(fitsInStorage(capture$('a'.repeat(room)))).toBe(true)
+    expect(fitsInStorage(capture$('a'.repeat(room + 1)))).toBe(false)
+    expect(fitsInStorage(capture$('汉'.repeat(Math.floor(room / 3) + 1)))).toBe(false)
+  })
+
+  it('lets one push carry the largest record with its JSON envelope', () => {
+    const largest = capture$('a'.repeat(MAX_RECORD_BYTES - recordBytes(capture$(''))))
+    const body = JSON.stringify({ records: [largest] })
+    expect(new TextEncoder().encode(body).byteLength).toBeLessThanOrEqual(MAX_PUSH_BYTES)
+  })
+
+  it('explains what to do about a record that is too large', () => {
+    expect(new RecordTooLargeError().message).toMatch(/too large.*1\.9 MB.*split it/i)
+  })
+})
+
+describe('taking a run within a byte budget', () => {
+  const size = (item: number) => item
+
+  it('takes items from the start while they fit, and says more was left', () => {
+    expect(takeWithinBytes([40, 40, 40, 40], size, 100)).toEqual({ taken: [40, 40], more: true })
+    expect(takeWithinBytes([40, 40, 20], size, 100)).toEqual({ taken: [40, 40, 20], more: false })
+    expect(takeWithinBytes([], size, 100)).toEqual({ taken: [], more: false })
+  })
+
+  it('always takes the first item, so one large record still goes through alone', () => {
+    expect(takeWithinBytes([500, 1, 1], size, 100)).toEqual({ taken: [500], more: true })
+    expect(takeWithinBytes([500], size, 100)).toEqual({ taken: [500], more: false })
+  })
+
+  it('never lets a large item share a run it would overflow', () => {
+    expect(takeWithinBytes([10, 95, 10], size, 100)).toEqual({ taken: [10], more: true })
+  })
+
+  it('also stops at a count', () => {
+    expect(takeWithinBytes([1, 1, 1, 1], size, 100, 3)).toEqual({ taken: [1, 1, 1], more: true })
+    expect(takeWithinBytes([1, 1, 1], size, 100, 3)).toEqual({ taken: [1, 1, 1], more: false })
+  })
+
+  it('reads a lazy source only as far as it needs, as a database cursor should be', () => {
+    let read = 0
+    function* rows() {
+      for (let row = 0; row < 1000; row++) {
+        read++
+        yield 60
+      }
+    }
+    expect(takeWithinBytes(rows(), size, 100).taken).toEqual([60])
+    expect(read).toBe(2) // the row that did not fit is the last one read
   })
 })
 

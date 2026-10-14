@@ -52,8 +52,10 @@ export default function WorkspaceHeader({
   onOpenNavigation: () => void
 }) {
   const unsynced = status !== 'synced'
+  // On phones an open search takes the whole row, and a page with a back link gets a bar of its own.
+  const modes = `${searchOpen ? ' is-searching' : ''}${back ? ' has-back' : ''}`
   return (
-    <header className="workspace-header">
+    <header className={`workspace-header${modes}`}>
       <div className="mobile-only">
         <button
           ref={navigationRef}

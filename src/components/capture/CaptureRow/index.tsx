@@ -31,6 +31,9 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
 }) {
   const [open, setOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [useSheet, setUseSheet] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 760px), (hover: none) and (pointer: coarse)').matches,
+  )
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const menu = useRef<HTMLDivElement>(null)
   const row = useRef<HTMLElement>(null)
@@ -57,20 +60,26 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
 
   useEffect(() => cancelHold, [])
   useEffect(() => {
+    const media = window.matchMedia('(max-width: 760px), (hover: none) and (pointer: coarse)')
+    const update = () => setUseSheet(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useEffect(() => {
     if (!hovered || selecting) return
     const shift = (event: KeyboardEvent) => { if (event.key === 'Shift') setOpen(true) }
     window.addEventListener('keydown', shift)
     return () => window.removeEventListener('keydown', shift)
   }, [hovered, selecting])
   useLayoutEffect(() => {
-    if (!open || !more.current || !menu.current) return
+    if (!open || useSheet || !more.current || !menu.current) return
     const anchor = more.current.getBoundingClientRect()
     const bounds = menu.current.getBoundingClientRect()
     const bottom = Math.min(window.innerHeight, row.current?.closest('.workspace-scroll')?.getBoundingClientRect().bottom ?? window.innerHeight)
     const top = anchor.top + bounds.height <= bottom ? anchor.top : anchor.bottom - bounds.height
     setPosition({ top: Math.max(8, Math.min(top, window.innerHeight - bounds.height - 8)), left: Math.max(8, Math.min(anchor.left - bounds.width - 4, window.innerWidth - bounds.width - 8)) })
     if (document.activeElement === more.current) menu.current.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
-  }, [open])
+  }, [open, useSheet])
   useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent) => {
@@ -133,7 +142,7 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
           {capture.kind === 'voice' && <span className="capture-kind"><Mic size={12} aria-hidden="true" /> Voice</span>}
           {taskCount > 0 && <span className="capture-kind"><ListTodo size={12} aria-hidden="true" /> {plural(taskCount, 'task')}</span>}
         </div>
-        <div inert={selecting}>
+        <div className="capture-extras" inert={selecting}>
           <CaptureTasks
             capture={capture}
             suggestions={suggestions}
@@ -149,22 +158,47 @@ export default function CaptureRow({ capture, tasks, selected, actions }: {
           <button ref={more} className="icon-button capture-more" type="button" aria-expanded={open} aria-controls={menuId} aria-label="Note actions" onClick={() => setOpen((value) => !value)}>
             <Ellipsis size={17} />
           </button>
-          {open && createPortal(
-            <div ref={menu} className="capture-actions" style={position} id={menuId} role="group" aria-label="Note actions" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && !row.current?.contains(event.relatedTarget)) setOpen(false) }}>
-              <button className="button button-quiet" type="button" onClick={() => choose(actions.onCopy)}>
-                <Copy size={15} aria-hidden="true" /> Copy
-              </button>
-              <button className="button button-quiet" type="button" disabled={capture.ai === 'queued'} onClick={() => choose(actions.onGenerateTasks)}>
-                <Sparkles size={15} aria-hidden="true" /> {capture.ai === 'queued' ? 'Finding tasks…' : 'Generate tasks'}
-              </button>
-              <button className="button button-quiet" type="button" onClick={() => choose(actions.onCreateTask)}>
-                <Plus size={15} aria-hidden="true" /> Make task
-              </button>
-              <button className="button button-quiet button-danger-text" type="button" onClick={() => choose(actions.onDelete)}>
-                <Trash2 size={15} aria-hidden="true" /> Delete
-              </button>
-            </div>
-          , document.body)}
+          {open && (
+            createPortal(
+              <>
+                {useSheet && (
+                  <div
+                    className="sheet-scrim"
+                    onClick={() => {
+                      setOpen(false)
+                      more.current?.focus()
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+                <div
+                  ref={menu}
+                  className="capture-actions"
+                  style={useSheet ? undefined : position}
+                  id={menuId}
+                  role="group"
+                  aria-label="Note actions"
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget) && !row.current?.contains(event.relatedTarget)) setOpen(false)
+                  }}
+                >
+                  <button className="button button-quiet" type="button" autoFocus={useSheet} onClick={() => choose(actions.onCopy)}>
+                    <Copy size={15} aria-hidden="true" /> Copy
+                  </button>
+                  <button className="button button-quiet" type="button" disabled={capture.ai === 'queued'} onClick={() => choose(actions.onGenerateTasks)}>
+                    <Sparkles size={15} aria-hidden="true" /> {capture.ai === 'queued' ? 'Finding tasks…' : 'Generate tasks'}
+                  </button>
+                  <button className="button button-quiet" type="button" onClick={() => choose(actions.onCreateTask)}>
+                    <Plus size={15} aria-hidden="true" /> Make task
+                  </button>
+                  <button className="button button-quiet button-danger-text" type="button" onClick={() => choose(actions.onDelete)}>
+                    <Trash2 size={15} aria-hidden="true" /> Delete
+                  </button>
+                </div>
+              </>,
+              document.body,
+            )
+          )}
         </div>
       )}
     </article>

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { clearLocalData, loadData, readOutbox, saveLocal } from '../src/services/localDataService'
-import { deleteCaptures, purgeExpiredTasks, saveTask, setTaskCompleted, setTaskPinned } from '../src/services/workspaceService'
+import { archiveCaptures, deleteCaptures, purgeExpiredCaptures, purgeExpiredTasks, restoreCaptures, saveTask, setTaskCompleted, setTaskPinned } from '../src/services/workspaceService'
 import type { SyncRecord } from '../src/shared/types/sync'
 import type { Capture, Task } from '../src/shared/types/task'
 
@@ -13,6 +13,7 @@ const capture = (id: string): Capture => ({
   createdAt: '2026-09-25T09:00:00.000Z',
   updatedAt: '2026-09-25T09:00:00.000Z',
   deletedAt: null,
+  archivedAt: null,
   ai: 'ready',
 })
 
@@ -84,5 +85,26 @@ describe('workspace operations', () => {
     const data = await loadData()
     expect(data.captures).toEqual(captures)
     expect(data.tasks.some((task) => task.title === 'A separate task' && task.captureId === 'a')).toBe(true)
+  })
+
+  it('archives a note and restores it', async () => {
+    const [archived] = await archiveCaptures([captures[0]])
+    expect(archived.value).toMatchObject({ id: 'a', deletedAt: null })
+    expect((archived.value as Capture).archivedAt).toBeTruthy()
+    const [restored] = await restoreCaptures([archived.value as Capture])
+    expect(restored.value).toMatchObject({ id: 'a', archivedAt: null })
+  })
+
+  it('deletes archived notes past their 30 days and their linked tasks', async () => {
+    const now = new Date('2026-11-01T00:00:00.000Z')
+    const expired = { ...captures[0], archivedAt: '2026-09-25T00:00:00.000Z' }
+    const recent = { ...captures[1], archivedAt: '2026-10-31T00:00:00.000Z' }
+    await saveLocal([expired, recent].map((value): SyncRecord => ({ type: 'capture', value })))
+
+    const records = await purgeExpiredCaptures([expired, recent, captures[2]], tasks, now)
+    expect(records.map((record) => `${record.type}:${record.value.id}`)).toEqual(['capture:a', 'task:ta'])
+    const left = await loadData()
+    expect(left.captures.map(({ id }) => id)).toEqual(['b', 'c'])
+    expect(left.tasks.map(({ id }) => id)).toEqual(['tb', 'tc'])
   })
 })

@@ -1,6 +1,7 @@
 import { createSession, deleteSession, openLiveSocket, pullRecords, pushRecords, type LiveHandlers } from '../connectors/syncConnector'
 import type { SyncOutcome, SyncRecord } from '../shared/types/sync'
 import { HttpError, UnreachableError } from '../shared/utils/http'
+import { MAX_RECORD_BYTES, recordBytes, takeWithinBytes } from '../shared/utils/records'
 import { acknowledgeOutbox, applyRemote, clearLocalData, countOutbox, readCursor, readOutbox } from './localDataService'
 
 const PUSH_BATCH = 100
@@ -9,8 +10,10 @@ const PUSH_BATCH = 100
 async function runSync(): Promise<SyncOutcome> {
   try {
     for (let entries = await readOutbox(PUSH_BATCH); entries.length; entries = await readOutbox(PUSH_BATCH)) {
-      await pushRecords(entries.map((entry) => entry.record))
-      await acknowledgeOutbox(entries)
+      // Large notes go in smaller pushes, so a batch never passes the size the server accepts.
+      const { taken } = takeWithinBytes(entries, (entry) => recordBytes(entry.record), MAX_RECORD_BYTES)
+      await pushRecords(taken.map((entry) => entry.record))
+      await acknowledgeOutbox(taken)
     }
     const applied: SyncRecord[] = []
     let cursor = await readCursor()
