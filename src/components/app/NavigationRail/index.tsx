@@ -49,7 +49,7 @@ export default function NavigationRail({
             <X size={18} />
           </button>
         </div>
-        <ViewNavigation section={section} counts={counts} onSelect={onSelect} overflow={open ? 'expanded' : 'disclosure'} />
+        <ViewNavigation section={section} counts={counts} onSelect={onSelect} />
         <div className="rail-footer">
           {onInstall && (
             <button className="rail-install" type="button" onClick={onInstall}>
@@ -61,7 +61,7 @@ export default function NavigationRail({
         </div>
       </aside>
       {open && <div className="rail-scrim" onClick={onClose} aria-hidden="true" />}
-      <div className="mobile-navigation" inert={open}><ViewNavigation section={section} counts={counts} onSelect={onSelect} overflow="hidden" /></div>
+      <div className="mobile-navigation" inert={open}><ViewNavigation section={section} counts={counts} onSelect={onSelect} compact /></div>
     </>
   )
 }

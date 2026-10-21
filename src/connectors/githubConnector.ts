@@ -41,6 +41,7 @@ export async function githubRequest(path: string, token: string, signal: AbortSi
       throw new Error(`GitHub request failed (${response.status}). Try refreshing.`)
     }
     const data: unknown = await response.json()
+    combined.throwIfAborted()
     if (key) await cacheGitHubResponse(key, data, response.headers.get('etag'))
     return data
   } catch (error) {
@@ -97,4 +98,12 @@ export function readGitHubSnapshot(login: string, ids: number[]): GitHubActivity
 }
 export function cacheGitHubSnapshot(login: string, ids: number[], activity: GitHubActivity) {
   localStorage.setItem(`${SNAPSHOT_KEY}${login}`, JSON.stringify({ ids, activity }))
+}
+
+/** Signing out removes repository metadata and cached private GitHub responses as well. */
+export async function clearGitHubData(): Promise<void> {
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('task-set:github')) localStorage.removeItem(key)
+  }
+  if (typeof caches !== 'undefined') await caches.delete(RESPONSE_CACHE)
 }

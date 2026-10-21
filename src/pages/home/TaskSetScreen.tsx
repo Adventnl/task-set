@@ -6,7 +6,6 @@ import SettingsDialog from '../../components/app/SettingsDialog'
 import Tabs, { tabId } from '../../components/app/Tabs'
 import Toast from '../../components/app/Toast'
 import WorkspaceHeader, { type HeaderAction } from '../../components/app/WorkspaceHeader'
-import SignInScreen from '../../components/auth/SignInScreen'
 import ComingUp from '../../components/calendar/ComingUp'
 import CaptureFeed from '../../components/capture/CaptureFeed'
 import type { CaptureActions } from '../../components/capture/CaptureRow'
@@ -58,8 +57,6 @@ export default function TaskSetScreen() {
     })
   }
   const dictation = useDictation((text) => void send(text, 'voice'))
-
-  if (data.sync.status === 'signed-out') return <SignInScreen onSignIn={data.sync.signIn} />
 
   const toggleTask = (task: Task) => void data.toggleTask(task)
   const editTask = (task: Task) => ui.setEditor({ captureId: task.captureId, task })

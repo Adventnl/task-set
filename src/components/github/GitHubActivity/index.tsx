@@ -10,7 +10,7 @@ export default function GitHubActivity({ activity, loading, completed, total }: 
         <div><dt>Open PRs{loading ? ' loaded' : ''}</dt><dd>{activity.pulls.length}</dd></div>
         <div><dt>Ahead branches{loading ? ' loaded' : ''}</dt><dd>{activity.branches.length}</dd></div>
       </dl>
-      <p className="modal-note" role="status">{loading ? progress : `Updated ${new Date(activity.updatedAt).toLocaleTimeString()}. Refreshes every minute while this view is open.`}</p>
+      <p className="modal-note" role="status">{loading ? progress : `Updated ${new Date(activity.updatedAt).toLocaleString()}. Saved on this device. Refresh to check for changes.`}</p>
       {activity.warnings.length > 0 && (
         <details className="github-warnings">
           <summary>Some activity could not be loaded ({activity.warnings.length}). Results may be incomplete.</summary>

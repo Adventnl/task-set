@@ -1,8 +1,9 @@
 import { Buffer } from 'node:buffer'
 import type { SyncRecord } from '../src/shared/types/sync'
 import { fitsInStorage, MAX_PUSH_BYTES, parseSyncRecord } from '../src/shared/utils/records'
-import { authConfigured, clearSessionCookie, createSessionCookie, hasSession, passcodeMatches } from './auth'
+import { authConfigured, clearSessionCookie, hasSession } from './auth'
 import { json, readBody, readJson } from './http'
+import { privateApp, privateResponse, signIn } from './access'
 import type { TaskSpace } from './taskSpace'
 import { githubProxy, type GitHubEnv } from './github'
 
@@ -14,18 +15,6 @@ const MAX_AUDIO_BYTES = 8 * 1024 * 1024
 const MAX_PUSH_RECORDS = 200
 const NO_SPEECH_LIMIT = 0.6
 const allowedAudio = new Set(['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/ogg'])
-
-async function signIn(request: Request, env: Env): Promise<Response> {
-  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown'
-  const { success } = await env.AUTH_RATE_LIMIT.limit({ key: ip })
-  if (!success) return json({ error: 'Too many attempts. Wait a minute and try again.' }, 429)
-  const body = await readJson(request, 2048)
-  const passcode = body && typeof body === 'object' && 'passcode' in body ? body.passcode : null
-  if (typeof passcode !== 'string' || !(await passcodeMatches(passcode, env))) {
-    return json({ error: 'That passcode is not right.' }, 401)
-  }
-  return json({ signedIn: true }, 200, { 'Set-Cookie': await createSessionCookie(env) })
-}
 
 async function push(request: Request, space: DurableObjectStub<TaskSpace>): Promise<Response> {
   const body = await readJson(request, MAX_PUSH_BYTES)
@@ -77,6 +66,9 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   if (endpoint === 'DELETE /api/session') return json({ signedIn: false }, 200, { 'Set-Cookie': clearSessionCookie() })
   if (!(await hasSession(request, env))) return json({ error: 'Sign in to continue.' }, 401)
 
+  if (endpoint === 'GET /api/session') return json({ signedIn: true })
+  if (endpoint === 'GET /api/github') return githubProxy(request, env as Env & GitHubEnv)
+
   const space = env.TASK_SPACE.getByName(WORKSPACE)
   switch (endpoint) {
     case 'GET /api/sync': {
@@ -88,8 +80,6 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
       return push(request, space)
     case 'GET /api/live':
       return space.fetch(request)
-    case 'GET /api/github':
-      return githubProxy(request, env as Env & GitHubEnv)
     case 'POST /api/ai/transcribe': {
       const { success } = await env.AI_RATE_LIMIT.limit({ key: 'transcribe' })
       return success ? transcribe(request, env) : json({ error: 'Too many voice notes at once. Try again in a minute.' }, 429)
@@ -117,13 +107,12 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url)
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request)
     try {
-      return await route(request, env, url)
+      return privateResponse(await (url.pathname.startsWith('/api/') ? route(request, env, url) : privateApp(request, env)))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.error(JSON.stringify({ event: 'api_failed', route: url.pathname, message }))
-      return json({ error: 'Task Set could not finish that. Your data on this device is safe; try again.' }, 500)
+      return privateResponse(json({ error: 'Task Set could not finish that. Try again.' }, 500))
     }
   },
 } satisfies ExportedHandler<Env>

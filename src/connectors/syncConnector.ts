@@ -3,6 +3,29 @@ import { requestJson } from '../shared/utils/http'
 import { parseSyncRecord } from '../shared/utils/records'
 
 const KEEP_ALIVE_MS = 30_000
+const SESSION_CHANNEL = 'task-set:session'
+const SESSION_ENDED = 'task-set:session-ended'
+
+export function notifySessionEnded(): void {
+  window.dispatchEvent(new Event(SESSION_ENDED))
+  if (typeof BroadcastChannel !== 'undefined') {
+    const channel = new BroadcastChannel(SESSION_CHANNEL)
+    channel.postMessage('signed-out')
+    channel.close()
+  }
+}
+
+export function watchSessionEnd(onEnded: () => void): () => void {
+  window.addEventListener(SESSION_ENDED, onEnded)
+  const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(SESSION_CHANNEL) : null
+  if (channel) channel.onmessage = (event) => { if (event.data === 'signed-out') onEnded() }
+  return () => { window.removeEventListener(SESSION_ENDED, onEnded); channel?.close() }
+}
+
+export async function checkSession(): Promise<void> {
+  const body = await requestJson('/api/session')
+  if (!body || typeof body !== 'object' || !('signedIn' in body) || body.signedIn !== true) throw new Error('Could not verify access. Try again.')
+}
 
 export async function createSession(passcode: string): Promise<void> {
   await requestJson('/api/session', {

@@ -13,7 +13,7 @@ export default function GitHubScreen({ github }: { github: ReturnType<typeof use
           <div className="github-toolbar">
             <p className="modal-text">Connected as <strong>{github.login}</strong></p>
             <div className="github-actions">
-              <button className="button button-secondary" type="button" onClick={github.refresh} disabled={github.loading}>Refresh</button>
+              <button className="button button-secondary" type="button" onClick={github.refresh} disabled={github.loading || github.discovering || github.busy || github.selected.length === 0}>Refresh</button>
               <a className="button button-quiet" href={`https://github.com/${encodeURIComponent(github.login)}`} target="_blank" rel="noopener noreferrer">Open GitHub ↗</a>
             </div>
           </div>

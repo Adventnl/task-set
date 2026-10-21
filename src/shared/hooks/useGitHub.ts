@@ -2,17 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { connectOwnerGitHub, discoverGitHubRepositories, isGitHubAuthenticationError, loadGitHubActivity, readGitHubSelection, saveGitHubSelection, restoreGitHubActivity, saveGitHubActivity, readOwnerGitHubBinding, saveOwnerGitHubBinding } from '../../services/githubService'
 import type { GitHubActivity, GitHubBinding } from '../types/github'
 
-const REFRESH_MS = 60_000
-
 export function useGitHub(active: boolean, signedIn: boolean) {
   const connecting = useRef<AbortController | null>(null)
-  const lastDiscovery = useRef(0)
+  const refreshRequested = useRef(false)
+  const [restored, setRestored] = useState(false)
   const [binding, setBinding] = useState<GitHubBinding | null>(null)
   const [selected, setSelected] = useState<number[]>([])
   const selection = useRef<number[]>([])
   const [activity, setActivity] = useState<GitHubActivity | null>(null)
-  const activityRef = useRef(activity)
-  activityRef.current = activity
+  // Only completed/restored snapshots suppress automatic first loads; progressive results do not.
+  const snapshotRef = useRef<GitHubActivity | null>(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [discovering, setDiscovering] = useState(false)
@@ -28,12 +27,19 @@ export function useGitHub(active: boolean, signedIn: boolean) {
     setSelected(ids)
   }
 
+  function updateActivity(snapshot: GitHubActivity | null) {
+    snapshotRef.current = snapshot
+    setActivity(snapshot)
+  }
+
   useEffect(() => {
     if (!signedIn) {
       setBinding(null)
       setRepositories([])
       updateSelection([])
-      setActivity(null)
+      updateActivity(null)
+      setRestored(false)
+      refreshRequested.current = false
       setNeedsToken(false)
       setError('')
       setStorageError('')
@@ -56,12 +62,11 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       const connection = await connectOwnerGitHub(AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]))
       if (controller.signal.aborted) return
       setRepositories(connection.repositories)
-      lastDiscovery.current = Date.now()
       const saved = readGitHubSelection(connection.login)
       updateSelection(saved === null ? connection.repositories.map((repo) => repo.id) : saved.filter((id) => connection.repositories.some((repo) => repo.id === id)))
       setNeedsToken(false)
       setBinding(connection)
-      setActivity(restoreGitHubActivity(connection.login, selection.current))
+      updateActivity(restoreGitHubActivity(connection.login, selection.current))
       try { saveOwnerGitHubBinding(connection); setStorageError('') } catch { setStorageError('Repository list could not be cached on this device.') }
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Could not connect to the owner?s GitHub account.')
@@ -78,13 +83,14 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       setRepositories(saved.repositories)
       const ids = (readGitHubSelection(saved.login) ?? saved.repositories.map((repo) => repo.id)).filter((id) => saved.repositories.some((repo) => repo.id === id))
       updateSelection(ids)
-      setActivity(restoreGitHubActivity(saved.login, ids))
+      updateActivity(restoreGitHubActivity(saved.login, ids))
     }
+    setRestored(true)
   }, [signedIn])
 
   useEffect(() => {
-    if (active && signedIn && !binding && !busy && !error) void connect()
-  }, [active, signedIn, binding, busy, error])
+    if (restored && active && signedIn && !binding && !busy && !error) void connect()
+  }, [restored, active, signedIn, binding, busy, error])
 
   async function reloadRepositories() {
     if (!binding || discovering) return
@@ -98,7 +104,6 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       if (controller.signal.aborted) return
       saveOwnerGitHubBinding({ ...binding, repositories: found })
       setRepositories(found)
-      lastDiscovery.current = Date.now()
       const selectedAll = repositories.length > 0 && selection.current.length === repositories.length
       choose(selectedAll ? found.map((repo) => repo.id) : selection.current.filter((id) => found.some((repo) => repo.id === id)))
     } catch (cause) {
@@ -113,7 +118,7 @@ export function useGitHub(active: boolean, signedIn: boolean) {
 
   function choose(ids: number[]) {
     updateSelection(ids)
-    setActivity(binding ? restoreGitHubActivity(binding.login, ids) : null)
+    updateActivity(binding ? restoreGitHubActivity(binding.login, ids) : null)
     setError('')
     try {
       if (binding) saveGitHubSelection(binding.login, ids)
@@ -124,27 +129,25 @@ export function useGitHub(active: boolean, signedIn: boolean) {
   }
 
   useEffect(() => {
-    if (!active || !signedIn || !binding || needsToken) { setLoading(false); return }
+    if (!active || !signedIn || !binding || needsToken || discovering || selected.length === 0) { setLoading(false); return }
+    // Reopening the view, reconnecting, and time passing never invalidate a saved snapshot.
+    if (snapshotRef.current && !refreshRequested.current) { setLoading(false); return }
+    refreshRequested.current = false
     const bound = binding
     const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout> | undefined
     async function refresh() {
-      if (document.visibilityState !== 'visible') {
-        timer = setTimeout(() => void refresh(), REFRESH_MS)
-        return
-      }
       setLoading(true)
       setCompleted(0)
       setError('')
       try {
-        const previous = activityRef.current
+        const previous = snapshotRef.current
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(90_000)])
         const result = await loadGitHubActivity(repositories.filter((repo) => selected.includes(repo.id)), '', signal, (partial, count) => {
           if (!controller.signal.aborted) { if (!previous) setActivity(partial); setCompleted(count) }
         })
         if (!controller.signal.aborted) {
           const snapshot = previous && result.warnings.length ? { ...previous, warnings: ['Refresh was incomplete. Showing the last saved activity until a complete refresh succeeds.', ...result.warnings] } : result
-          setActivity(snapshot)
+          updateActivity(snapshot)
           try { saveGitHubActivity(bound.login, selected, snapshot); setStorageError('') } catch { setStorageError('Activity loaded, but could not be cached on this device.') }
         }
       } catch (cause) {
@@ -155,34 +158,16 @@ export function useGitHub(active: boolean, signedIn: boolean) {
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false)
-          timer = setTimeout(() => void refresh(), REFRESH_MS)
         }
       }
     }
     void refresh()
-    const onVisible = () => { if (document.visibilityState === 'visible') setRevision((value) => value + 1) }
-    const onOnline = () => setRevision((value) => value + 1)
-    window.addEventListener('online', onOnline)
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      controller.abort()
-      clearTimeout(timer)
-      window.removeEventListener('online', onOnline)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [active, signedIn, binding, repositories, selected, needsToken, revision])
-
-  useEffect(() => {
-    if (!active || !signedIn || !binding || needsToken) return
-    const check = () => { if (!document.hidden && Date.now() - lastDiscovery.current > 600_000) { lastDiscovery.current = Date.now(); void reloadRepositories() } }
-    check()
-    const timer = window.setInterval(check, 600_000)
-    return () => window.clearInterval(timer)
-  }, [active, signedIn, binding, needsToken])
+    return () => { controller.abort() }
+  }, [active, signedIn, binding, repositories, selected, needsToken, discovering, revision])
 
   return {
     login: binding?.login ?? '', repositories, selected, activity, busy, loading, discovering, completed, needsToken, error, storageError,
     connect, choose, reloadRepositories,
-    refresh: () => setRevision((value) => value + 1),
+    refresh: () => { refreshRequested.current = true; setRevision((value) => value + 1) },
   }
 }

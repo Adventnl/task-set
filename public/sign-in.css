@@ -1,0 +1,36 @@
+/* The same paper, ink, amber, and system typography as the private app. */
+:root {
+  color-scheme: light dark;
+  --canvas: light-dark(#fdfcfa, #1b1b1d);
+  --text: light-dark(#1d1c1a, #eeede9);
+  --text-muted: light-dark(#6e6a62, #9e9b94);
+  --surface: light-dark(#fff, #29292c);
+  --control-border: light-dark(#8c877d, #75726c);
+  --accent: light-dark(#8f5f00, #f2c14e);
+  --accent-fill: #f2b400;
+  --on-accent: #1d1c1a;
+  --danger: light-dark(#b3261e, #ff8f86);
+  --space-2: 8px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --radius-md: 8px;
+  --touch: 44px;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
+  background: var(--canvas);
+  color: var(--text);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.sign-in { min-height: 100dvh; display: grid; place-items: center; padding: var(--space-5); }
+.sign-in-form { width: min(100%, 340px); display: flex; flex-direction: column; }
+.sign-in-form img { object-fit: contain; }
+h1 { margin: var(--space-4) 0 0; font-size: 32px; letter-spacing: -0.025em; }
+p { margin: var(--space-2) 0 var(--space-5); color: var(--text-muted); }
+label { font-weight: 600; margin-bottom: var(--space-2); }
+input, button { font: inherit; min-height: var(--touch); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); }
+input { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); }
+button { margin-top: var(--space-4); background: var(--accent-fill); color: var(--on-accent); border: 0; font-weight: 600; cursor: pointer; }
+button:hover { filter: brightness(0.95); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+::selection { background: var(--accent-fill); color: var(--on-accent); }
+.form-error { color: var(--danger); margin: var(--space-4) 0 0; }

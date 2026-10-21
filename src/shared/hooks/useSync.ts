@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { connectLive, requestSync, signIn as signInService, signOut as signOutService, unsyncedChangeCount } from '../../services/syncService'
+import { connectLive, requestSync, signOut as signOutService, unsyncedChangeCount } from '../../services/syncService'
+import { lockWorkspace } from '../../services/sessionService'
 import type { SyncOutcome, SyncRecord, SyncStatus } from '../types/sync'
 
 const RETRY_MS = 20_000
@@ -18,6 +19,7 @@ export function useSync({ enabled, ...handlers }: { enabled: boolean; onApplied:
   })
 
   const settle = useCallback((outcome: SyncOutcome) => {
+    if (outcome.status === 'signed-out') lockWorkspace()
     if (outcome.status === 'synced' && outcome.applied.length) handlersRef.current.onApplied(outcome.applied)
     setStatus(outcome.status)
     setMessage(outcome.status === 'error' ? outcome.message : '')
@@ -74,18 +76,11 @@ export function useSync({ enabled, ...handlers }: { enabled: boolean; onApplied:
     }
   }, [status, sync])
 
-  const signIn = useCallback(
-    async (passcode: string) => {
-      settle(await signInService(passcode))
-    },
-    [settle],
-  )
-
   const signOut = useCallback(async () => {
     await signOutService()
     handlersRef.current.onReset()
     setStatus('signed-out')
   }, [])
 
-  return { status, message, sync, signIn, signOut, unsyncedChangeCount }
+  return { status, message, sync, signOut, unsyncedChangeCount }
 }

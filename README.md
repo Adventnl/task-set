@@ -21,7 +21,7 @@ The app is built to run at `task.hanoryx.com` on Cloudflare. It has not been dep
 - **Select and delete.** The select button in the Notes header puts a circle beside every note. Tick several (or **Select all**, which respects a search) and delete them together; tasks made from them go too. Escape or × stops selecting.
 - **Appearance.** Open Settings (the gear beside the sync status) and choose System, Light, or Dark. The choice is kept on that device only.
 - **Sync.** Signed-in devices share one private workspace. Changes appear on the other devices within about a second. When two devices edit the same task, the most recent edit wins. Deleting a note also deletes the tasks made from it.
-- **Install as an app.** In Chrome or Edge on a computer or Android phone, choose **Install app** in the sidebar or in Settings (or the install icon in the address bar). On iPhone, use Safari's **Share → Add to Home Screen**; on a Mac, Safari's **File → Add to Dock**. The installed app opens in its own window, opens without a connection, and syncs when it can. Settings says when it is already installed. **Changing the icon:** Android saves an installed app's icon when it is installed. Chrome swaps in a new one by itself in the days after the site changes it (it re-checks when you open the app, then updates in the background), but not on a schedule you can force. To see it now, remove the app from the home screen and install it again. Check first that Settings says everything is saved, because a note that has not synced yet exists only on that phone. The icon only changes after the new build is deployed; open `/icons/icon-192.png` on the site to confirm it is live.
+- **Install as an app.** In Chrome or Edge on a computer or Android phone, choose **Install app** in the sidebar or in Settings (or the install icon in the address bar). On iPhone, use Safari's **Share → Add to Home Screen**; on a Mac, Safari's **File → Add to Dock**. The installed app opens in its own window, requires a connection to open or reload, then keeps local changes and syncs when it can. Settings says when it is already installed. **Changing the icon:** Android saves an installed app's icon when it is installed. Chrome swaps in a new one by itself in the days after the site changes it (it re-checks when you open the app, then updates in the background), but not on a schedule you can force. To see it now, remove the app from the home screen and install it again. Check first that Settings says everything is saved, because a note that has not synced yet exists only on that phone. The icon only changes after the new build is deployed; open `/icons/icon-192.png` on the site to confirm it is live.
 
 Keyboard: ⌘K (Ctrl+K) searches notes and their tasks, N focuses the composer, arrow keys move around the calendar month and between the Tasks tabs, and Escape closes search or a dialog.
 
@@ -46,7 +46,8 @@ To change the passcode, run `npx wrangler secret put APP_PASSCODE`; every device
 ## Security model
 
 - One person, one passcode. Signing in sets an HttpOnly, Secure, SameSite=Strict cookie that is valid for 400 days and is signed with `SESSION_SECRET`. The passcode is part of the signature, so changing it ends every session.
-- Every API route checks the session. Writes and the live socket also require a same-origin request.
+- The Worker checks authentication before serving the app document, JavaScript/CSS bundles, or APIs. Signed-out visitors receive a separate server-rendered passcode form; the private component tree and local workspace storage are not opened before session verification. Writes, sign-in, and the live socket require a same-origin request.
+- App responses use `private, no-store`. The network-only service worker removes old shell caches; offline reload cannot open private content. Local saves still work through a connection loss in an already-open, authenticated app. Signing out also removes cached GitHub data and locks other open tabs.
 - Notes, tasks, calendar events, meetings, and meeting notes are stored in a Durable Object in your Cloudflare account and in each signed-in browser's IndexedDB. Signing out removes the browser copy.
 - Note text is sent to Workers AI for task suggestions. It goes to OpenRouter, and the provider it routes to, only when the fallback key is set and Workers AI fails.
 - Audio is never stored. The fallback transcription audio exists only for the length of one request.
@@ -61,7 +62,7 @@ npm run build && npm run worker:dev    # API, Durable Object, and built app on h
 npm run dev                            # in a second terminal: hot-reloading UI that proxies /api to the Worker
 ```
 
-`.dev.vars` is ignored by git. The AI binding always calls Cloudflare's hosted models, even in local development, so AI requests use the logged-in account's allocation. Add `OPENROUTER_API_KEY` to `.dev.vars` only to exercise the fallback locally; without it, a failed Workers AI call simply fails. Without the Worker running, `npm run dev` still works as a local-only app and shows *Offline*.
+`.dev.vars` is ignored by git. The AI binding always calls Cloudflare's hosted models, even in local development, so AI requests use the logged-in account's allocation. Add `OPENROUTER_API_KEY` to `.dev.vars` only to exercise the fallback locally; without it, a failed Workers AI call simply fails. The Worker must be running to unlock the UI, including during development; unavailable authentication leaves the workspace locked. The Vite UI uses the same session check before mounting private components.
 
 Run `npm run validate` before committing. It checks source layout and imports, type-checks the browser app and the Worker, runs the tests, and builds. For Worker or Wrangler changes, also run `npm run worker:dry-run`.
 
@@ -73,4 +74,13 @@ For direct Google place picking and all coloured category pins on the same map, 
 
 The public map/search need a connection; saved places remain available locally. The CSP allows Google's iframe and the resources used by its JavaScript API. The key-enabled integration has automated connector coverage but still needs a live browser check with your restricted key.
 
-GitHub owner access separately requires Adventnl's read-access `GITHUB_TOKEN` as a Worker secret: `npx wrangler secret put GITHUB_TOKEN`. Never put it in a browser build variable. The existing passcode protects workspace and GitHub data.
+## GitHub setup
+
+GitHub requests already run through the authenticated Worker. Its proxy permits only the read endpoints used for account verification, repository discovery, pull requests, branches, comparisons, checks and commit statuses. Merging still happens on GitHub.
+
+1. In [GitHub’s fine-grained token settings](https://github.com/settings/personal-access-tokens/new), create a token as **Adventnl**, select the intended resource owner and repositories, and choose an expiry you can renew.
+2. Grant repository **read-only** permissions for **Contents**, **Pull requests**, **Checks**, and **Commit statuses**. Metadata read access is included automatically. See [GitHub’s permission reference](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens).
+3. In Cloudflare, open **Workers & Pages → task-set → Settings → Variables and Secrets**, add a **Secret** named `GITHUB_TOKEN`, and deploy that settings change. Alternatively, run `npx wrangler secret put GITHUB_TOKEN` in this repository and enter it at the prompt. Preview secrets are separate: `npx wrangler preview secret put GITHUB_TOKEN`.
+4. Sign in to Task Set, open GitHub and choose **Retry connection**, then select repositories. The Worker verifies that the token belongs to Adventnl before reading activity. Renew a revoked or expired token by replacing the same secret.
+
+Never paste the token into chat, commit it, store it in browser settings, or use a `VITE_` variable. A GitHub connector connected to this coding agent does not automatically configure the deployed Worker. If organization-owned private repositories are needed, their organization must permit/approve the token; a fine-grained token is limited to its chosen resource owner.

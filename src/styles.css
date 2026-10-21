@@ -2416,11 +2416,6 @@ textarea.text-field {
 }
 
 /* Lists inherit the workspace's paper canvas, rows, controls, and amber accent. */
-.view-nav-more { min-width: 0; }
-.view-nav-more > summary { list-style: none; }
-.view-nav-more > summary::-webkit-details-marker { display: none; }
-.view-nav-more > summary { width: 100%; }
-.view-nav-more-items { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
 .checklist-index, .checklist-items { list-style: none; margin: 0; padding: 0; }
 .checklist-link { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; min-height: var(--space-8); padding: var(--space-4) 0; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--line); }
 .checklist-link:hover { color: var(--accent); }

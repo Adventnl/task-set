@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 
-/** Shown when the server asks this device to sign in. Local data stays on the device meanwhile. */
+/** Development/session-expiry fallback. The private workspace stays unmounted while locked. */
 export default function SignInScreen({ onSignIn }: { onSignIn: (passcode: string) => Promise<void> }) {
   const [passcode, setPasscode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,7 +24,7 @@ export default function SignInScreen({ onSignIn }: { onSignIn: (passcode: string
       <form className="sign-in-form" onSubmit={submit}>
         <img className="brand-mark brand-mark-large" src="/icons/icon-192.png" alt="" width="48" height="48" />
         <h1>Task Set</h1>
-        <p>Enter your passcode to sync this device.</p>
+        <p>Enter your passcode to open your private workspace.</p>
         <label className="field-label" htmlFor="passcode">
           Passcode
         </label>

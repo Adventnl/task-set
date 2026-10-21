@@ -21,7 +21,7 @@ export class UnreachableError extends Error {
 export async function requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
   let response: Response
   try {
-    response = await fetch(path, { ...init, credentials: 'same-origin' })
+    response = await fetch(path, { ...init, cache: 'no-store', credentials: 'same-origin' })
   } catch {
     throw new UnreachableError()
   }

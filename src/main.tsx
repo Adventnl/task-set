@@ -9,9 +9,9 @@ createRoot(document.getElementById('root')!).render(
   </React.StrictMode>,
 )
 
-// The service worker lets the installed app open without a connection.
+// The network-only worker also removes shells cached by earlier versions.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error: unknown) => console.error('Offline support is unavailable.', error))
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((error: unknown) => console.error('Service worker update is unavailable.', error))
   })
 }

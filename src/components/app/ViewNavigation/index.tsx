@@ -1,5 +1,5 @@
-import { CalendarDays, GitPullRequest, ListChecks, ListTodo, MapPin, MoreHorizontal, NotebookText, Users, type LucideIcon } from 'lucide-react'
-import { MORE_SECTIONS, PRIMARY_SECTIONS, VIEW_LABELS, type Section } from '../../../shared/config/views'
+import { CalendarDays, GitPullRequest, ListChecks, ListTodo, MapPin, NotebookText, Users, type LucideIcon } from 'lucide-react'
+import { PRIMARY_SECTIONS, SIDEBAR_SECTIONS, VIEW_LABELS, type Section } from '../../../shared/config/views'
 
 const items: Record<Section, { icon: LucideIcon; countLabel: string }> = {
   feed: { icon: NotebookText, countLabel: 'notes' },
@@ -16,12 +16,12 @@ export default function ViewNavigation({
   section,
   counts,
   onSelect,
-  overflow = 'disclosure',
+  compact = false,
 }: {
   section: Section
   counts: Record<Section, number>
   onSelect: (section: Section) => void
-  overflow?: 'disclosure' | 'expanded' | 'hidden'
+  compact?: boolean
 }) {
   function renderItem(id: Section) {
     const { icon: Icon, countLabel } = items[id]
@@ -39,14 +39,7 @@ export default function ViewNavigation({
   }
   return (
     <nav className="view-nav" aria-label="Views">
-      {PRIMARY_SECTIONS.map(renderItem)}
-      {overflow === 'expanded' && MORE_SECTIONS.map(renderItem)}
-      {overflow === 'disclosure' && (
-        <details className="view-nav-more" open={MORE_SECTIONS.includes(section) || undefined}>
-          <summary className="view-nav-item"><MoreHorizontal className="view-nav-icon" size={18} aria-hidden="true" /><span>More</span></summary>
-          <div className="view-nav-more-items">{MORE_SECTIONS.map(renderItem)}</div>
-        </details>
-      )}
+      {(compact ? PRIMARY_SECTIONS : SIDEBAR_SECTIONS).map(renderItem)}
     </nav>
   )
 }

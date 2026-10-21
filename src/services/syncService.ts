@@ -1,4 +1,6 @@
-import { createSession, deleteSession, openLiveSocket, pullRecords, pushRecords, type LiveHandlers } from '../connectors/syncConnector'
+import { deleteSession, openLiveSocket, pullRecords, pushRecords, type LiveHandlers } from '../connectors/syncConnector'
+import { clearGitHubData } from '../connectors/githubConnector'
+import { closeWorkspace } from './sessionService'
 import type { SyncOutcome, SyncRecord } from '../shared/types/sync'
 import { HttpError, UnreachableError } from '../shared/utils/http'
 import { MAX_RECORD_BYTES, recordBytes, takeWithinBytes } from '../shared/utils/records'
@@ -34,9 +36,11 @@ async function runSync(): Promise<SyncOutcome> {
 
 let running: Promise<SyncOutcome> | null = null
 let queued: Promise<SyncOutcome> | null = null
+let signingOut = false
 
 /** Runs one sync at a time. Requests made during a run share a single follow-up run. */
 export function requestSync(): Promise<SyncOutcome> {
+  if (signingOut) return Promise.resolve({ status: 'signed-out' })
   if (!running) {
     running = runSync().finally(() => {
       running = null
@@ -50,16 +54,21 @@ export function requestSync(): Promise<SyncOutcome> {
   return queued
 }
 
-/** Signs this device in; throws with a readable message when the passcode is refused. */
-export async function signIn(passcode: string): Promise<SyncOutcome> {
-  await createSession(passcode)
-  return requestSync()
-}
-
 /** Ends the session and removes this device's copy. Requires a connection to clear the cookie. */
 export async function signOut(): Promise<void> {
-  await deleteSession()
-  await clearLocalData()
+  signingOut = true
+  try {
+    await deleteSession()
+    await closeWorkspace(async () => {
+      // Let any sync that started before logout settle before clearing its local writes.
+      await queued
+      await running
+      await clearLocalData()
+      await clearGitHubData()
+    })
+  } finally {
+    signingOut = false
+  }
 }
 
 export function unsyncedChangeCount(): Promise<number> {

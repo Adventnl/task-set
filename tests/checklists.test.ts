@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { addChecklistItems, deleteChecklist, deleteChecklistItem, saveChecklist, setChecklistItemCompleted } from '../src/services/checklistService'
 import { applyRemote, clearLocalData, loadData, readOutbox } from '../src/services/localDataService'
-import { MORE_SECTIONS, PRIMARY_SECTIONS, sectionOf } from '../src/shared/config/views'
+import { PRIMARY_SECTIONS, SIDEBAR_SECTIONS, sectionOf } from '../src/shared/config/views'
 import { checklistLines, checklistSummaries, orderedChecklistItems } from '../src/shared/utils/checklist'
 import { EMPTY_WORKSPACE, MAX_RECORD_BYTES, mergeRecords, parseSyncRecord } from '../src/shared/utils/records'
 import { CHILD_TYPE, deletedRecord, mergeRecord, parentOf } from '../worker/merge'
@@ -125,9 +125,9 @@ describe('Lists', () => {
     expect((await loadData()).checklistItems).toEqual([])
   })
 
-  it('keeps the requested five main sections and puts Tasks and Map in More', () => {
-    expect(PRIMARY_SECTIONS).toEqual(['feed', 'lists', 'calendar', 'github', 'meetings'])
-    expect(MORE_SECTIONS).toEqual(['tasks', 'map'])
+  it('shows all sections in sidebar order and keeps the phone bar compact', () => {
+    expect(SIDEBAR_SECTIONS).toEqual(['feed', 'calendar', 'github', 'lists', 'tasks', 'map', 'meetings'])
+    expect(PRIMARY_SECTIONS).toEqual(['feed', 'calendar', 'github', 'lists', 'meetings'])
     expect(sectionOf('lists')).toBe('lists')
     expect(sectionOf('archive')).toBe('tasks')
   })
