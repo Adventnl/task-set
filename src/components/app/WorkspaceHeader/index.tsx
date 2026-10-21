@@ -27,6 +27,8 @@ export default function WorkspaceHeader({
   search,
   searchRef,
   selecting,
+  searchPlaceholder = 'Search notes',
+  searchLabel = 'Search notes and their tasks',
   onSearchChange,
   onOpenSearch,
   onCloseSearch,
@@ -44,6 +46,8 @@ export default function WorkspaceHeader({
   search: string
   searchRef: RefObject<HTMLInputElement | null>
   selecting: boolean
+  searchPlaceholder?: string
+  searchLabel?: string
   onSearchChange: (value: string) => void
   onOpenSearch: () => void
   onCloseSearch: () => void
@@ -107,8 +111,8 @@ export default function WorkspaceHeader({
               type="search"
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search notes"
-              aria-label="Search notes and their tasks"
+              placeholder={searchPlaceholder}
+              aria-label={searchLabel}
             />
             <button className="icon-button" type="button" onClick={onCloseSearch} aria-label="Close search">
               <X size={16} />

@@ -2,8 +2,11 @@ import type { CalendarEvent } from './calendar'
 import type { Meeting, MeetingNote } from './meeting'
 import type { Capture, Task } from './task'
 import type { MapCategory, MapPin } from './map'
+import type { Checklist, ChecklistItem } from './checklist'
 
 export type SyncRecord =
+  | { type: 'checklist'; value: Checklist }
+  | { type: 'checklistItem'; value: ChecklistItem }
   | { type: 'mapCategory'; value: MapCategory }
   | { type: 'mapPin'; value: MapPin }
   | { type: 'capture'; value: Capture }
@@ -14,6 +17,8 @@ export type SyncRecord =
 
 /** Every record on this device that has not been deleted, oldest first. */
 export interface WorkspaceData {
+  checklists: Checklist[]
+  checklistItems: ChecklistItem[]
   mapCategories: MapCategory[]
   mapPins: MapPin[]
   captures: Capture[]

@@ -6,10 +6,12 @@ export type Section = Exclude<View, 'archive' | 'noteArchive'>
 /** Matches the stylesheet's narrow-screen breakpoint, where the sidebar becomes a drawer. */
 export const NARROW_SCREEN_QUERY = '(max-width: 760px)'
 
-export const SECTIONS: readonly Section[] = ['feed', 'tasks', 'calendar', 'meetings', 'github', 'map']
+export const PRIMARY_SECTIONS: readonly Section[] = ['feed', 'lists', 'calendar', 'github', 'meetings']
+export const MORE_SECTIONS: readonly Section[] = ['tasks', 'map']
 
 export const VIEW_LABELS: Record<View, string> = {
   feed: 'Notes',
+  lists: 'Lists',
   noteArchive: 'Archive',
   tasks: 'Tasks',
   archive: 'Archive',

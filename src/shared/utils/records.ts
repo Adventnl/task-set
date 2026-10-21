@@ -1,3 +1,4 @@
+import type { Checklist, ChecklistItem } from '../types/checklist'
 import type { CalendarEvent } from '../types/calendar'
 import type { Meeting, MeetingNote } from '../types/meeting'
 import type { SyncRecord, WorkspaceData } from '../types/sync'
@@ -129,6 +130,8 @@ export function parseMeetingNote(value: unknown): MeetingNote | null {
 export function parseSyncRecord(value: unknown): SyncRecord | null {
   if (!isObject(value)) return null
   switch (value.type) {
+    case 'checklist': { const list = parseChecklist(value.value); return list && { type: 'checklist', value: list } }
+    case 'checklistItem': { const item = parseChecklistItem(value.value); return item && { type: 'checklistItem', value: item } }
     case 'mapCategory': { const category = parseMapCategory(value.value); return category && { type: 'mapCategory', value: category } }
     case 'mapPin': { const pin = parseMapPin(value.value); return pin && { type: 'mapPin', value: pin } }
     case 'capture': {
@@ -202,7 +205,7 @@ export function markDeleted<T extends Base>(value: T, at: string): T {
   return { ...value, deletedAt: at, updatedAt: at }
 }
 
-export const EMPTY_WORKSPACE: WorkspaceData = { captures: [], tasks: [], events: [], meetings: [], meetingNotes: [], mapCategories: [], mapPins: [] }
+export const EMPTY_WORKSPACE: WorkspaceData = { checklists: [], checklistItems: [], captures: [], tasks: [], events: [], meetings: [], meetingNotes: [], mapCategories: [], mapPins: [] }
 
 export function byCreatedAt<T extends Base>(a: T, b: T): number {
   return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
@@ -223,6 +226,8 @@ function applyValues<T extends Base>(list: T[], values: T[]): T[] {
 export function mergeRecords(state: WorkspaceData, records: SyncRecord[]): WorkspaceData {
   if (!records.length) return state
   return {
+    checklists: applyValues(state.checklists, records.flatMap((record) => record.type === 'checklist' ? [record.value] : [])),
+    checklistItems: applyValues(state.checklistItems, records.flatMap((record) => record.type === 'checklistItem' ? [record.value] : [])),
     mapCategories: applyValues(state.mapCategories, records.flatMap((record) => record.type === 'mapCategory' ? [record.value] : [])),
     mapPins: applyValues(state.mapPins, records.flatMap((record) => record.type === 'mapPin' ? [record.value] : [])),
     captures: applyValues(state.captures, records.flatMap((record) => (record.type === 'capture' ? [record.value] : []))),
@@ -246,4 +251,20 @@ export function parseMapPin(value: unknown): MapPin | null {
   if (!base || !isText(name, 200) || !isId(categoryId) || typeof note !== 'string') return null
   if (typeof latitude !== 'number' || !Number.isFinite(latitude) || Math.abs(latitude) > 90 || typeof longitude !== 'number' || !Number.isFinite(longitude) || Math.abs(longitude) > 180) return null
   return { ...base, name: name.trim(), latitude, longitude, categoryId, note }
+}
+
+export function parseChecklist(value: unknown): Checklist | null {
+  if (!isObject(value)) return null
+  const base = parseBase(value)
+  if (!base || !isText(value.name, MAX_TITLE_LENGTH)) return null
+  return { ...base, name: value.name.trim() }
+}
+
+export function parseChecklistItem(value: unknown): ChecklistItem | null {
+  if (!isObject(value)) return null
+  const base = parseBase(value)
+  const completedAt = isoOrNull(value.completedAt ?? null)
+  if (!base || !isId(value.listId) || !isText(value.text) || completedAt === undefined) return null
+  if (typeof value.position !== 'number' || !Number.isSafeInteger(value.position) || value.position < 0) return null
+  return { ...base, listId: value.listId, text: value.text.trim(), position: value.position, completedAt }
 }

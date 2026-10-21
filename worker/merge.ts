@@ -63,6 +63,15 @@ export function mergeMeetingNote(existing: MeetingNote | null, incoming: Meeting
  */
 export function mergeRecord(existing: SyncRecord | null, incoming: SyncRecord): SyncRecord | null {
   switch (incoming.type) {
+    case 'checklist': {
+      const value = mergeEdit(existing?.type === 'checklist' ? existing.value : null, incoming.value)
+      return value && { type: 'checklist', value }
+    }
+    case 'checklistItem': {
+      const previous = existing?.type === 'checklistItem' ? existing.value : null
+      const value = mergeEdit(previous, incoming.value)
+      return value && { type: 'checklistItem', value: { ...value, listId: previous?.listId ?? value.listId } }
+    }
     case 'mapCategory': { const value = mergeEdit(existing?.type === 'mapCategory' ? existing.value : null, incoming.value); return value && { type: 'mapCategory', value } }
     case 'mapPin': { const value = mergeEdit(existing?.type === 'mapPin' ? existing.value : null, incoming.value); return value && { type: 'mapPin', value } }
     case 'capture': {
@@ -89,10 +98,11 @@ export function mergeRecord(existing: SyncRecord | null, incoming: SyncRecord): 
 }
 
 /** Deleting a parent deletes its children: a capture's tasks and a meeting's notes. */
-export const CHILD_TYPE: Partial<Record<RecordType, RecordType>> = { capture: 'task', meeting: 'meetingNote', mapCategory: 'mapPin' }
+export const CHILD_TYPE: Partial<Record<RecordType, RecordType>> = { checklist: 'checklistItem', capture: 'task', meeting: 'meetingNote', mapCategory: 'mapPin' }
 
 /** The record a child belongs to, or null for a record that has no parent. */
 export function parentOf(record: SyncRecord): { type: RecordType; id: string } | null {
+  if (record.type === 'checklistItem') return { type: 'checklist', id: record.value.listId }
   if (record.type === 'mapPin') return { type: 'mapCategory', id: record.value.categoryId }
   if (record.type === 'task' && record.value.captureId) return { type: 'capture', id: record.value.captureId }
   if (record.type === 'meetingNote') return { type: 'meeting', id: record.value.meetingId }
@@ -103,6 +113,8 @@ export function parentOf(record: SyncRecord): { type: RecordType; id: string } |
 export function deletedRecord(record: SyncRecord, at: string): SyncRecord {
   const deleted = <T extends Editable>(value: T): T => ({ ...value, deletedAt: at, updatedAt: at > value.updatedAt ? at : value.updatedAt })
   switch (record.type) {
+    case 'checklist': return { type: 'checklist', value: deleted(record.value) }
+    case 'checklistItem': return { type: 'checklistItem', value: deleted(record.value) }
     case 'mapCategory': return { type: 'mapCategory', value: deleted(record.value) }
     case 'mapPin': return { type: 'mapPin', value: deleted(record.value) }
     case 'capture':

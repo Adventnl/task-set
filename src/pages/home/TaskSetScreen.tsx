@@ -31,6 +31,8 @@ import MeetingsScreen from './MeetingsScreen'
 import GitHubScreen from './GitHubScreen'
 import MapScreen from './MapScreen'
 import { useMapView } from '../../shared/hooks/useMapView'
+import { useListsView } from '../../shared/hooks/useListsView'
+import ListsScreen from './ListsScreen'
 
 const NOTES_PANEL = 'notes-panel'
 const TASKS_PANEL = 'tasks-panel'
@@ -41,6 +43,7 @@ export default function TaskSetScreen() {
   const data = useTaskSet()
   const keepAwake = useKeepAwake(data.sync.status !== 'signed-out')
   const ui = useWorkspaceView(data.workspace)
+  const lists = useListsView(data, ui.view === 'lists' ? ui.search : '', ui.closeSearch, ui.scrollRef)
   const schedule = useSchedule(data, ui.calendar.select)
   const map = useMapView(data, ui.view === 'map' && !data.loading && data.sync.status !== 'signed-out')
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
@@ -105,7 +108,9 @@ export default function TaskSetScreen() {
   const editor = ui.editor
   const openMeeting = ui.view === 'meetings' ? ui.meetings.meeting : null
   const headerAction: HeaderAction | undefined =
-    ui.view !== 'meetings'
+    ui.view === 'lists'
+      ? { label: 'New list', icon: Plus, onClick: lists.startNew }
+      : ui.view !== 'meetings'
       ? undefined
       : openMeeting
         ? { label: 'Edit meeting', icon: Pencil, onClick: () => ui.meetings.editMeeting(openMeeting.id) }
@@ -114,6 +119,8 @@ export default function TaskSetScreen() {
 
   function content() {
     switch (ui.view) {
+      case 'lists':
+        return <ListsScreen lists={lists} confirm={ui.setConfirmation} />
       case 'map':
         return <MapScreen map={map} confirm={ui.setConfirmation} />
       case 'github':
@@ -201,15 +208,17 @@ export default function TaskSetScreen() {
       />
       <main className="workspace" inert={ui.navigationOpen}>
         <WorkspaceHeader
-          title={ui.title}
-          detail={ui.detail}
-          back={openMeeting ? { label: 'Meetings', onClick: ui.meetings.closeMeeting } : undefined}
+          title={ui.view === 'lists' && lists.selected ? lists.selected.name : ui.title}
+          detail={ui.view === 'lists' ? lists.selected ? `${lists.completed} of ${lists.total} checked` : `${data.workspace.checklists.length} ${data.workspace.checklists.length === 1 ? 'list' : 'lists'}` : ui.detail}
+          back={ui.view === 'lists' && lists.selected ? { label: 'Lists', onClick: lists.close } : openMeeting ? { label: 'Meetings', onClick: ui.meetings.closeMeeting } : undefined}
           action={headerAction}
           status={data.sync.status}
           navigationOpen={ui.navigationOpen}
           navigationRef={ui.navigationRef}
           searchOpen={ui.searchOpen}
           search={ui.search}
+          searchPlaceholder={ui.view === 'lists' ? lists.selected ? 'Search items' : 'Search lists' : undefined}
+          searchLabel={ui.view === 'lists' ? lists.selected ? 'Search items in this list' : 'Search lists and their items' : undefined}
           searchRef={ui.searchRef}
           selecting={ui.selecting}
           onSearchChange={ui.setSearch}
@@ -229,7 +238,7 @@ export default function TaskSetScreen() {
           <div className="column">{!data.loading && content()}</div>
         </div>
         {/* GitHub has no composer; with nothing to float above it either, the dock would only reserve blank space. */}
-        <div className="dock" hidden={ui.view === 'github' && !data.notice && !data.archivedTask && !data.flash}>
+        <div className="dock" hidden={(ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
           {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
           {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedNotesToast ? (
@@ -265,7 +274,7 @@ export default function TaskSetScreen() {
             placeholder={ui.composer.placeholder}
             label={ui.composer.label}
             draftKey={ui.view === 'meetings' ? `meeting:${openMeeting?.id ?? 'list'}:${ui.meetings.detail?.date ?? ''}` : ui.section === 'calendar' ? `calendar:${ui.calendar.selected}` : ui.section}
-            hidden={ui.selecting || ui.view === 'github' || ui.view === 'map'}
+            hidden={ui.selecting || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
             onSend={(text) => send(text, 'text')}
           />
         </div>

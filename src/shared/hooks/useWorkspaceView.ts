@@ -76,7 +76,7 @@ export function useWorkspaceView(data: WorkspaceData) {
   }, [navigationOpen])
 
   function openSearch() {
-    setView('feed')
+    if (view !== 'lists') setView('feed')
     setSearchOpen(true)
     requestAnimationFrame(() => searchRef.current?.focus())
   }
@@ -138,7 +138,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [searchOpen, selecting, navigationOpen])
+  }, [view, searchOpen, selecting, navigationOpen])
 
   const feed = useMemo(() => selectCaptureData(activeCaptures, activeTasks, search), [activeCaptures, activeTasks, search, today])
   // Only messages still on screen count, so a search or another device's deletion never widens a delete.
@@ -151,6 +151,7 @@ export function useWorkspaceView(data: WorkspaceData) {
   const counts: Record<Section, number> = {
     feed: activeCaptures.length,
     tasks: taskCount,
+    lists: data.checklists.length,
     calendar: calendar.upcoming.length,
     meetings: data.meetings.length,
     github: 0,

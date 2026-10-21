@@ -30,7 +30,7 @@ export interface Task {
 }
 
 /** `feed` is the Notes view; `noteArchive` is its Archive tab; `archive` is the Tasks tab that holds completed tasks until they expire. */
-export type View = 'feed' | 'noteArchive' | 'tasks' | 'archive' | 'calendar' | 'meetings' | 'github' | 'map'
+export type View = 'feed' | 'noteArchive' | 'lists' | 'tasks' | 'archive' | 'calendar' | 'meetings' | 'github' | 'map'
 /** Where the composer's words go: a new note, a calendar day, or a meeting day's notes. */
 export type ComposerTarget = { kind: 'note' } | { kind: 'task' } | { kind: 'event'; date: string } | { kind: 'meeting'; date: string } | { kind: 'meetingNote'; meetingId: string; date: string }
 export type Editor = { captureId: string | null; task?: Task }
