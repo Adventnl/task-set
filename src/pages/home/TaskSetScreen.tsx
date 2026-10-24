@@ -1,3 +1,5 @@
+import FinanceScreen from './FinanceScreen'
+import { useFinance } from '../../shared/hooks/useFinance'
 import { Pencil, Plus } from 'lucide-react'
 import ConfirmDialog from '../../components/app/ConfirmDialog'
 import NavigationRail from '../../components/app/NavigationRail'
@@ -45,6 +47,7 @@ export default function TaskSetScreen() {
   const lists = useListsView(data, ui.view === 'lists' ? ui.search : '', ui.closeSearch, ui.scrollRef)
   const schedule = useSchedule(data, ui.calendar.select)
   const map = useMapView(data, ui.view === 'map' && !data.loading && data.sync.status !== 'signed-out')
+  const finance = useFinance(ui.view === 'finances', data.sync.status !== 'signed-out' && !data.loading)
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
@@ -101,7 +104,7 @@ export default function TaskSetScreen() {
     onDismissSuggestion: (task) => void data.reviewSuggestion(task, 'dismiss'),
     onToggleSelected: (capture) => ui.toggleSelected(capture.id),
   }
-  const counts = { ...ui.counts, github: github.activity?.pulls.length ?? 0, map: data.workspace.mapPins.length }
+  const counts = { ...ui.counts, finances: finance.unread, github: github.activity?.pulls.length ?? 0, map: data.workspace.mapPins.length }
   const editor = ui.editor
   const openMeeting = ui.view === 'meetings' ? ui.meetings.meeting : null
   const headerAction: HeaderAction | undefined =
@@ -116,6 +119,8 @@ export default function TaskSetScreen() {
 
   function content() {
     switch (ui.view) {
+      case 'finances':
+        return <FinanceScreen finance={finance} />
       case 'lists':
         return <ListsScreen lists={lists} confirm={ui.setConfirmation} />
       case 'map':
@@ -235,7 +240,7 @@ export default function TaskSetScreen() {
           <div className="column">{!data.loading && content()}</div>
         </div>
         {/* GitHub has no composer; with nothing to float above it either, the dock would only reserve blank space. */}
-        <div className="dock" hidden={(ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
+        <div className="dock" hidden={(ui.view === 'finances' || ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
           {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
           {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedNotesToast ? (
@@ -271,7 +276,7 @@ export default function TaskSetScreen() {
             placeholder={ui.composer.placeholder}
             label={ui.composer.label}
             draftKey={ui.view === 'meetings' ? `meeting:${openMeeting?.id ?? 'list'}:${ui.meetings.detail?.date ?? ''}` : ui.section === 'calendar' ? `calendar:${ui.calendar.selected}` : ui.section}
-            hidden={ui.selecting || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
+            hidden={ui.selecting || ui.view === 'finances' || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
             onSend={(text) => send(text, 'text')}
           />
         </div>

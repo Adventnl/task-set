@@ -1,0 +1,26 @@
+import {
+  restoreFinanceBackup,
+  getRecurring,
+  uploadReceipt,
+  downloadFinanceReport,
+  enableFinancePush,
+  getFinance,
+  getFinanceMetrics,
+  getFinanceTransaction,
+  getFinanceTransactions,
+  postFinance,
+  saveFinanceReview,
+} from '../connectors/financeConnector'
+export const financeService = {
+  load: getFinance,
+  restore: restoreFinanceBackup,
+  recurring: getRecurring,
+  upload: uploadReceipt,
+  metrics: getFinanceMetrics,
+  list: getFinanceTransactions,
+  transaction: getFinanceTransaction,
+  save: saveFinanceReview,
+  command: postFinance,
+  enablePush: enableFinancePush,
+  export: downloadFinanceReport,
+}

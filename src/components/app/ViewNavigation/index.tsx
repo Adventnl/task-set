@@ -1,4 +1,4 @@
-import { CalendarDays, GitPullRequest, ListChecks, ListTodo, MapPin, NotebookText, Users, type LucideIcon } from 'lucide-react'
+import { Wallet, CalendarDays, GitPullRequest, ListChecks, ListTodo, MapPin, NotebookText, Users, type LucideIcon } from 'lucide-react'
 import { PRIMARY_SECTIONS, SIDEBAR_SECTIONS, VIEW_LABELS, type Section } from '../../../shared/config/views'
 
 const items: Record<Section, { icon: LucideIcon; countLabel: string }> = {
@@ -8,6 +8,7 @@ const items: Record<Section, { icon: LucideIcon; countLabel: string }> = {
   calendar: { icon: CalendarDays, countLabel: 'coming up' },
   meetings: { icon: Users, countLabel: 'meetings' },
   github: { icon: GitPullRequest, countLabel: 'open PRs' },
+  finances: { icon: Wallet, countLabel: 'unread financial notifications' },
   map: { icon: MapPin, countLabel: 'places' },
 }
 

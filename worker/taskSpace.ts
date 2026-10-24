@@ -1,4 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
+import { FinanceStore } from './finance/store'
+import { financeApi } from './finance/api'
+import { deliverPush } from './finance/push'
+import type { AkahuEnv } from './finance/akahu'
 import type { LiveMessage, PullResponse, SyncRecord } from '../src/shared/types/sync'
 import type { Capture } from '../src/shared/types/task'
 import { automaticGeneration } from '../src/shared/utils/capture'
@@ -30,8 +34,10 @@ function requestBatch(): string {
  * to its parent (a task to its capture, a meeting note to its meeting) so deletions cascade.
  */
 export class TaskSpace extends DurableObject<Env> {
+  private finance: FinanceStore
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
+    this.finance = new FinanceStore(ctx.storage, env as Env & AkahuEnv)
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
     ctx.blockConcurrencyWhile(async () => {
       const sql = this.ctx.storage.sql
@@ -62,6 +68,17 @@ export class TaskSpace extends DurableObject<Env> {
       }
       sql.exec('CREATE INDEX IF NOT EXISTS records_by_parent ON records (type, parent_id);')
     })
+  }
+
+  async financeRequest(request: Request): Promise<Response> {
+    return financeApi(request, this.finance, this.ctx.storage, this.env as Env & AkahuEnv)
+  }
+
+  async financeSync(): Promise<void> {
+    const env = this.env as Env & AkahuEnv
+    if (!env.AKAHU_APP_TOKEN || !env.AKAHU_USER_TOKEN) return
+    await this.finance.sync()
+    await deliverPush(this.ctx.storage, env)
   }
 
   pull(since: number): PullResponse {

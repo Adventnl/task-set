@@ -1,0 +1,216 @@
+import type {
+  FinanceTransaction,
+  FinanceEdit,
+  FinanceCategory,
+  FinanceRule,
+  FinanceBudget,
+} from '../../src/shared/types/finance'
+import { validSplits } from '../../src/shared/utils/finance'
+import { FinanceRepository } from './repository'
+type BodyRow = { body: string }
+/** Local annotations, confirmed matching and their audit history never write bank source facts. */
+export class FinanceBookkeeping extends FinanceRepository {
+  private allTransactions(): FinanceTransaction[] {
+    return this.list<FinanceTransaction>('transactions').map((t) =>
+      this.annotated(t),
+    )
+  }
+  private annotated(tx: FinanceTransaction): FinanceTransaction {
+    const row = this.sql
+      .exec<BodyRow>(
+        'SELECT body FROM finance_bookkeeping WHERE transaction_id = ?',
+        tx.id,
+      )
+      .toArray()[0]
+    return row ? { ...tx, ...(JSON.parse(row.body) as FinanceEdit) } : tx
+  }
+  transaction(id: string): FinanceTransaction | null {
+    const t = this.read<FinanceTransaction>('transactions', id)
+    return t ? this.annotated(t) : null
+  }
+  audit(id: string): unknown[] {
+    return this.sql
+      .exec(
+        'SELECT changed_at, before_body, after_body FROM finance_audit WHERE transaction_id = ? ORDER BY changed_at DESC',
+        id,
+      )
+      .toArray()
+  }
+  edit(id: string, input: FinanceEdit): void {
+    const tx = this.transaction(id)
+    if (!tx) throw new Error('Transaction not found')
+    if (
+      !this.read('categories', input.category) ||
+      !validSplits(tx.amount, input.splits) ||
+      input.splits.some((s) => !this.read('categories', s.category))
+    )
+      throw new Error('Invalid category or split total')
+    if (input.transferId || input.refundId)
+      throw new Error('Use the confirmed matching action to link transactions')
+    const now = new Date().toISOString()
+    const edit = {
+      ...input,
+      transferId: tx.transferId,
+      refundId: tx.refundId,
+      reviewedAt: input.review === 'reviewed' ? now : null,
+    }
+    this.storage.transactionSync(() => {
+      this.sql.exec(
+        'INSERT OR REPLACE INTO finance_bookkeeping(transaction_id, body) VALUES (?, ?)',
+        id,
+        JSON.stringify(edit),
+      )
+      this.sql.exec(
+        'INSERT INTO finance_audit VALUES (?, ?, ?, ?, ?)',
+        crypto.randomUUID(),
+        id,
+        now,
+        JSON.stringify(tx),
+        JSON.stringify(edit),
+      )
+      if (input.createRule) {
+        const ruleId = crypto.randomUUID()
+        this.put('rules', ruleId, {
+          id: ruleId,
+          text: tx.merchant,
+          match: 'exact',
+          category: input.category,
+          priority: 100,
+          enabled: true,
+          accountId: null,
+          direction: 'any',
+        })
+      }
+    })
+  }
+  match(first: string, second: string, kind: 'transfer' | 'refund'): void {
+    const a = this.transaction(first),
+      b = this.transaction(second)
+    if (
+      !a ||
+      !b ||
+      a.id === b.id ||
+      a.currency !== b.currency ||
+      a.status !== 'settled' ||
+      b.status !== 'settled' ||
+      a.transferId ||
+      b.transferId ||
+      b.refundId ||
+      (kind === 'transfer' && a.refundId)
+    )
+      throw new Error('Transactions cannot be matched')
+    if (
+      (kind === 'transfer' &&
+        (a.accountId === b.accountId || a.amount !== -b.amount)) ||
+      (kind === 'refund' &&
+        (a.amount >= 0 || b.amount <= 0 || b.amount > -a.amount))
+    )
+      throw new Error('Amounts do not match')
+    if (kind === 'refund') {
+      const refunded = this.allTransactions()
+        .filter((t) => t.refundId === a.id && t.amount > 0)
+        .reduce((n, t) => n + t.amount, 0)
+      if (refunded + b.amount > -a.amount)
+        throw new Error('Refunds exceed the original purchase')
+    }
+    this.storage.transactionSync(() => {
+      for (const [tx, other] of [
+        [a, b],
+        [b, a],
+      ]) {
+        const updated = {
+          ...tx,
+          category:
+            kind === 'refund' &&
+            tx.id === b.id &&
+            tx.category === 'uncategorized' &&
+            !a.splits.length
+              ? a.category
+              : tx.category,
+          [kind === 'transfer' ? 'transferId' : 'refundId']:
+            kind === 'refund' && tx.id === a.id && tx.refundId
+              ? tx.refundId
+              : other.id,
+        }
+        this.sql.exec(
+          'INSERT OR REPLACE INTO finance_bookkeeping VALUES (?, ?)',
+          tx.id,
+          JSON.stringify({
+            category: updated.category,
+            notes: updated.notes,
+            tags: updated.tags,
+            review: updated.review,
+            reviewedAt: updated.reviewedAt,
+            excluded: updated.excluded,
+            transferId: updated.transferId,
+            refundId: updated.refundId,
+            splits: updated.splits,
+          }),
+        )
+        this.sql.exec(
+          'INSERT INTO finance_audit VALUES (?, ?, ?, ?, ?)',
+          crypto.randomUUID(),
+          tx.id,
+          new Date().toISOString(),
+          JSON.stringify(tx),
+          JSON.stringify(updated),
+        )
+      }
+    })
+  }
+  saveCategory(c: FinanceCategory): void {
+    const seen = new Set([c.id])
+    let parent = c.parentId
+    while (parent) {
+      if (seen.has(parent))
+        throw new Error('Category hierarchy cannot contain a cycle')
+      seen.add(parent)
+      const record = this.read<FinanceCategory>('categories', parent)
+      if (!record) throw new Error('Invalid parent category')
+      parent = record.parentId
+    }
+    this.put('categories', c.id, c)
+  }
+  mergeCategories(from: string, to: string): void {
+    const source = this.read<FinanceCategory>('categories', from),
+      target = this.read<FinanceCategory>('categories', to)
+    if (!source || !target || from === to || source.kind !== target.kind)
+      throw new Error('Select two different categories of the same kind')
+    const transactions = this.allTransactions()
+    for (const tx of transactions)
+      if (tx.category === from || tx.splits.some((s) => s.category === from)) {
+        const updated = {
+          category: tx.category === from ? to : tx.category,
+          notes: tx.notes,
+          tags: tx.tags,
+          review: tx.review,
+          reviewedAt: tx.reviewedAt,
+          excluded: tx.excluded,
+          transferId: tx.transferId,
+          refundId: tx.refundId,
+          splits: tx.splits.map((s) => ({
+            ...s,
+            category: s.category === from ? to : s.category,
+          })),
+        }
+        this.sql.exec(
+          'INSERT OR REPLACE INTO finance_bookkeeping VALUES (?, ?)',
+          tx.id,
+          JSON.stringify(updated),
+        )
+        this.sql.exec(
+          'INSERT INTO finance_audit VALUES (?, ?, ?, ?, ?)',
+          crypto.randomUUID(),
+          tx.id,
+          new Date().toISOString(),
+          JSON.stringify(tx),
+          JSON.stringify(updated),
+        )
+      }
+    for (const r of this.list<FinanceRule>('rules'))
+      if (r.category === from) this.put('rules', r.id, { ...r, category: to })
+    for (const b of this.list<FinanceBudget>('budgets'))
+      if (b.category === from) this.put('budgets', b.id, { ...b, category: to })
+    this.put('categories', from, { ...source, hidden: true })
+  }
+}

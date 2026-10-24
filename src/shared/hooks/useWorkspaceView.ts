@@ -30,7 +30,7 @@ export interface Confirmation {
  */
 export function useWorkspaceView(data: WorkspaceData) {
   const { captures, tasks } = data
-  const [view, setView] = useState<View>('feed')
+  const [view, setView] = useState<View>(window.location.hash.startsWith('#finance') ? 'finances' : 'feed')
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [selecting, setSelecting] = useState(false)
@@ -63,6 +63,12 @@ export function useWorkspaceView(data: WorkspaceData) {
     setNavigationOpen(false)
     requestAnimationFrame(() => navigationRef.current?.focus())
   }
+
+  useEffect(() => {
+    const openFinance = () => { if (window.location.hash.startsWith('#finance')) setView('finances') }
+    window.addEventListener('hashchange', openFinance)
+    return () => window.removeEventListener('hashchange', openFinance)
+  }, [])
 
   // The drawer exists only on narrow screens; widening the window closes it.
   useEffect(() => {
@@ -156,6 +162,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     meetings: data.meetings.length,
     github: 0,
     map: 0,
+    finances: 0,
   }
   const shownMeeting = view === 'meetings' ? meetings.meeting : null
   useLayoutEffect(() => {

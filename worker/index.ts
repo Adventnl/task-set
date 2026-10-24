@@ -70,6 +70,11 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   if (endpoint === 'GET /api/github') return githubProxy(request, env as Env & GitHubEnv)
 
   const space = env.TASK_SPACE.getByName(WORKSPACE)
+  if (url.pathname === '/api/finance' || url.pathname.startsWith('/api/finance/')) {
+    const expensive = ['/api/finance/sync', '/api/finance/refresh', '/api/finance/export'].includes(url.pathname)
+    if (expensive && !(await env.AUTH_RATE_LIMIT.limit({ key: 'finance-expensive' })).success) return json({ error: 'Too many finance requests. Retry in a minute.' }, 429)
+    return space.financeRequest(request)
+  }
   switch (endpoint) {
     case 'GET /api/sync': {
       const since = Number(url.searchParams.get('since') ?? '0')
@@ -105,6 +110,11 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 }
 
 export default {
+  async scheduled(_event, env, ctx): Promise<void> {
+    ctx.waitUntil(env.TASK_SPACE.getByName(WORKSPACE).financeSync().catch(() => {
+      console.error(JSON.stringify({ event: 'finance_sync_failed' }))
+    }))
+  },
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url)
     try {

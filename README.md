@@ -4,6 +4,7 @@ Task Set is a private notes app that finds your tasks. Type a thought or hold to
 
 The app is built to run at `task.hanoryx.com` on Cloudflare. It has not been deployed yet; see [Deploy](#deploy).
 
+- [Finance setup, architecture and verification limits](docs/finance.md)
 - [Product and build plan](docs/plan.md)
 - [Design direction](docs/DESIGN.md)
 - [Engineering rules for AI and human changes](docs/engineering-rules.md)
