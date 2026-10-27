@@ -1,156 +1,242 @@
+import { ArrowRight, Landmark, ListChecks } from 'lucide-react'
 import type {
   FinanceData,
   FinanceMetrics,
   FinancePage,
+  FinanceTab,
 } from '../../../shared/types/finance'
-import { financeTime, money } from '../../../shared/utils/finance'
+import { money } from '../../../shared/utils/finance'
+import { accountTotals } from '../../../shared/utils/financeDashboard'
+import FinanceActivity from '../FinanceActivity'
+import FinanceSpendingChart from '../FinanceSpendingChart'
+import FinanceCategorySpending from '../FinanceCategorySpending'
+
 export default function FinanceOverview({
   data,
   page,
   metrics,
-  analytics,
-  onReview,
+  loading,
+  onNavigate,
+  onOpen,
   onCategory,
 }: {
   data: FinanceData
   metrics: FinanceMetrics | null
   page: FinancePage
-  analytics: boolean
-  onReview: () => void
+  loading: boolean
+  onNavigate: (tab: FinanceTab) => void
+  onOpen: (id: string) => void
   onCategory: (id: string) => void
 }) {
-  const selected = data.accounts.filter(
-    (a) => a.included && !a.archived && a.currency === 'NZD',
-  )
-  const current =
-    selected.every((a) => a.current !== null) && selected.length
-      ? selected.reduce((n, a) => n + (a.current ?? 0), 0)
-      : null
-  const available =
-    selected.every((a) => a.available !== null) && selected.length
-      ? selected.reduce((n, a) => n + (a.available ?? 0), 0)
-      : null
+  const balances = accountTotals(data.accounts)
+  const accounts = data.accounts.filter((a) => !a.archived)
+  const value = (amount: number | null) => (loading ? '…' : money(amount))
   return (
-    <section>
-      <p className="finance-eyebrow">
-        {analytics ? 'Financial analytics' : 'Your financial position'} · NZD
-      </p>
-      <div className="finance-metrics">
+    <section
+      className="finance-overview"
+      aria-label="Financial overview"
+      aria-busy={loading}
+    >
+      <div className="finance-kpis">
         <article>
-          <span>Current balance</span>
-          <strong>{money(current)}</strong>
-          <small>Selected NZD accounts</small>
+          <span>
+            Total balance <small>NZD</small>
+          </span>
+          <strong>{money(balances.current)}</strong>
+          <small>
+            {balances.count} included accounts · {money(balances.available)}{' '}
+            available
+          </small>
         </article>
         <article>
-          <span>Available balance</span>
-          <strong>{money(available)}</strong>
-          <small>As reported by your bank</small>
+          <span>Money in</span>
+          <strong className="finance-income">
+            {value(metrics?.income ?? null)}
+          </strong>
+          <small>Settled receipts in this period</small>
         </article>
         <article>
-          <span>Income in selected period</span>
-          <strong className="finance-income">{money(page.income)}</strong>
-          <small>Settled, excluding transfers</small>
-        </article>
-        <article>
-          <span>Expenses in selected period</span>
-          <strong>{money(page.expenses)}</strong>
-          <small>Net of matched refunds</small>
+          <span>Money out</span>
+          <strong>{value(metrics?.expenses ?? null)}</strong>
+          <small>Spending after matched refunds</small>
         </article>
         <article>
           <span>Net cash flow</span>
-          <strong>{money(page.income - page.expenses)}</strong>
-        </article>
-        <article>
-          <span>Unread discoveries</span>
-          <strong>{data.unreadCount}</strong>
-          <button onClick={onReview}>Open review inbox</button>
+          <strong>{value(metrics?.net ?? null)}</strong>
+          <small>Money in less money out</small>
         </article>
       </div>
-      {metrics && (
-        <>
-          <div className="finance-metrics">
-            <article>
-              <span>Income detected today</span>
-              <strong>{money(metrics.todayIncome)}</strong>
-            </article>
-            <article>
-              <span>Spending detected today</span>
-              <strong>{money(metrics.todaySpending)}</strong>
-            </article>
-            <article>
-              <span>This month’s income</span>
-              <strong>{money(metrics.monthIncome)}</strong>
-            </article>
-            <article>
-              <span>This month’s expenses</span>
-              <strong>{money(metrics.monthExpenses)}</strong>
-              <small>
-                {metrics.previousExpenses
-                  ? `${(((metrics.monthExpenses - metrics.previousExpenses) / Math.abs(metrics.previousExpenses)) * 100).toFixed(1)}% versus full previous month`
-                  : 'No previous-month spending recorded'}
-              </small>
-            </article>
-            <article>
-              <span>Awaiting your review</span>
-              <strong>{metrics.reviewCount}</strong>
-              <button onClick={onReview}>Review transactions</button>
-            </article>
-          </div>
-          <h3>Spending in this period</h3>
-          {metrics.categories.slice(0, 6).map((c) => (
+      <div className="finance-dashboard-grid">
+        <article className="finance-panel finance-chart-panel">
+          <div className="finance-panel-heading">
+            <div>
+              <h2>Spending over time</h2>
+              <p>Recorded daily spending · NZD</p>
+            </div>
             <button
-              className="finance-bar"
-              key={c.id}
-              onClick={() => onCategory(c.id)}
+              className="finance-link"
+              onClick={() => onNavigate('Analytics')}
             >
-              <span>
-                {data.categories.find((v) => v.id === c.id)?.name ?? c.id}
+              Analytics <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
+          {loading ? (
+            <div className="finance-chart-empty" role="status">
+              Loading spending…
+            </div>
+          ) : (
+            <FinanceSpendingChart metrics={metrics} />
+          )}
+        </article>
+        <article className="finance-panel">
+          <div className="finance-panel-heading">
+            <h2>Your accounts</h2>
+            <button
+              className="finance-link"
+              onClick={() => onNavigate('Accounts')}
+            >
+              Manage <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
+          {!accounts.length && (
+            <div className="finance-panel-empty">
+              <Landmark size={24} aria-hidden="true" />
+              <strong>No accounts imported yet</strong>
+              <p>
+                Your connected bank accounts will appear after the first
+                successful sync.
+              </p>
+            </div>
+          )}
+          {accounts.slice(0, 4).map((a) => (
+            <button
+              key={a.id}
+              className="finance-account-row"
+              onClick={() => onNavigate('Accounts')}
+            >
+              <span className="finance-bank-icon" aria-hidden="true">
+                <Landmark size={18} />
               </span>
-              <meter
-                min="0"
-                max={Math.max(1, ...metrics.categories.map((c) => c.amount))}
-                value={Math.max(0, c.amount)}
-              />
-              <strong>{money(c.amount)}</strong>
+              <span>
+                <strong>{a.name}</strong>
+                <small>
+                  {a.institution} {a.masked}
+                  {!a.included ? ' · Excluded' : ''}
+                  {a.status !== 'ACTIVE' ? ' · Reconnect needed' : ''}
+                </small>
+              </span>
+              <strong>{money(a.current, a.currency)}</strong>
             </button>
           ))}
-        </>
-      )}
-      <p>Last successful application sync: {financeTime(data.lastSync)}</p>
-      <p className="finance-muted">
-        Daily bank refreshes can be delayed. Application sync checks cached
-        Akahu data; it does not force a bank refresh. Imported history starts{' '}
-        {data.earliest ? financeTime(data.earliest) : 'after the first import'}{' '}
-        and may be incomplete.
-      </p>
-      {data.accounts
-        .filter((a) => a.status !== 'ACTIVE')
-        .map((a) => (
-          <p role="status" key={a.id}>
-            {a.name}: connection inactive. Reconnect through my.akahu.nz.
-          </p>
-        ))}
-      <h3>Recently recorded transactions</h3>
-      {page.items.slice(0, 5).map((t) => (
-        <p key={t.id}>
-          {t.merchant} <strong>{money(t.amount, t.currency)}</strong> ·{' '}
-          {t.status}
-        </p>
-      ))}
-      <p>
-        {page.total} transactions match the current dates. Open Transactions to
-        inspect or change the selection.
-      </p>
-      <h3>Category explorer</h3>
-      <div className="finance-category-grid">
-        {data.categories
-          .filter((c) => !c.hidden && c.kind === 'expense')
-          .map((c) => (
-            <button key={c.id} onClick={() => onCategory(c.id)}>
-              {c.name}
+          {accounts.length > 4 && (
+            <button
+              className="finance-link"
+              onClick={() => onNavigate('Accounts')}
+            >
+              View all {accounts.length} accounts
             </button>
-          ))}
+          )}
+          <button
+            className="finance-review-prompt"
+            onClick={() => onNavigate('Review Inbox')}
+          >
+            <ListChecks size={20} aria-hidden="true" />
+            <span>
+              <strong>
+                {loading ? '…' : (metrics?.reviewCount ?? '—')} to review
+              </strong>
+              <small>Keep your categories up to date</small>
+            </span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </button>
+        </article>
+        <article className="finance-panel finance-recent-panel">
+          <div className="finance-panel-heading">
+            <div>
+              <h2>Recent transactions</h2>
+              <p>{page.total} transactions in this period</p>
+            </div>
+            <button
+              className="finance-link"
+              onClick={() => onNavigate('Transactions')}
+            >
+              View all <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
+          {loading || !page.items.length ? (
+            <div className="finance-panel-empty">
+              <strong>
+                {loading
+                  ? 'Loading transactions…'
+                  : 'No transactions in this period'}
+              </strong>
+              <p>Choose another date range or sync your connected accounts.</p>
+            </div>
+          ) : (
+            <FinanceActivity
+              data={data}
+              items={page.items.slice(0, 6)}
+              onOpen={onOpen}
+            />
+          )}
+        </article>
+        <article className="finance-panel">
+          <div className="finance-panel-heading">
+            <h2>Spending by category</h2>
+            <button
+              className="finance-link"
+              onClick={() => onNavigate('Budgets & Categories')}
+            >
+              Budgets <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
+          {loading ? (
+            <p className="finance-panel-empty">Loading category spending…</p>
+          ) : (
+            <FinanceCategorySpending
+              categories={data.categories}
+              values={metrics?.categories ?? []}
+              limit={5}
+              onCategory={onCategory}
+            />
+          )}
+          {data.budgets
+            .filter((b) => !b.archived)
+            .slice(0, 2)
+            .map((b) => {
+              const usage = metrics?.budgetUsage.find((u) => u.id === b.id)
+              return (
+                <button
+                  className="finance-category-row finance-budget-row"
+                  key={b.id}
+                  onClick={() => onNavigate('Budgets & Categories')}
+                >
+                  <span>
+                    {b.category
+                      ? data.categories.find((c) => c.id === b.category)?.name
+                      : 'Overall budget'}
+                    <small>{b.period}</small>
+                  </span>
+                  <meter
+                    aria-label="Budget used"
+                    min="0"
+                    max={b.amount}
+                    value={Math.max(0, usage?.spent ?? 0)}
+                  />
+                  <small>
+                    {money(usage?.spent ?? 0)} of {money(b.amount)}
+                    {usage && usage.spent > b.amount ? ' · Over budget' : ''}
+                  </small>
+                </button>
+              )
+            })}
+        </article>
       </div>
+      <p className="finance-footnote">
+        NZD settled transactions. Transfers and excluded items are omitted;
+        matched refunds reduce spending. Bank data can be delayed and imported
+        history may be incomplete.
+      </p>
     </section>
   )
 }

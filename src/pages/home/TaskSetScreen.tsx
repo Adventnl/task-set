@@ -1,3 +1,5 @@
+import NewsScreen from './NewsScreen'
+import { useNews } from '../../shared/hooks/useNews'
 import FinanceScreen from './FinanceScreen'
 import { useFinance } from '../../shared/hooks/useFinance'
 import { Pencil, Plus } from 'lucide-react'
@@ -48,6 +50,7 @@ export default function TaskSetScreen() {
   const schedule = useSchedule(data, ui.calendar.select)
   const map = useMapView(data, ui.view === 'map' && !data.loading && data.sync.status !== 'signed-out')
   const finance = useFinance(ui.view === 'finances', data.sync.status !== 'signed-out' && !data.loading)
+  const news = useNews(ui.view === 'news', data.sync.status !== 'signed-out' && !data.loading)
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
@@ -104,7 +107,7 @@ export default function TaskSetScreen() {
     onDismissSuggestion: (task) => void data.reviewSuggestion(task, 'dismiss'),
     onToggleSelected: (capture) => ui.toggleSelected(capture.id),
   }
-  const counts = { ...ui.counts, finances: finance.unread, github: github.activity?.pulls.length ?? 0, map: data.workspace.mapPins.length }
+  const counts = { ...ui.counts, news: news.digest?.articles.length ?? 0, finances: finance.unread, github: github.activity?.pulls.length ?? 0, map: data.workspace.mapPins.length }
   const editor = ui.editor
   const openMeeting = ui.view === 'meetings' ? ui.meetings.meeting : null
   const headerAction: HeaderAction | undefined =
@@ -119,6 +122,8 @@ export default function TaskSetScreen() {
 
   function content() {
     switch (ui.view) {
+      case 'news':
+        return <NewsScreen news={news} />
       case 'finances':
         return <FinanceScreen finance={finance} />
       case 'lists':
@@ -208,7 +213,7 @@ export default function TaskSetScreen() {
         onOpenSettings={openSettings}
         onInstall={installer.status === 'available' ? install : undefined}
       />
-      <main className="workspace" inert={ui.navigationOpen}>
+      <main className={`workspace${ui.view === 'finances' ? ' workspace-finance' : ''}`} inert={ui.navigationOpen}>
         <WorkspaceHeader
           title={ui.view === 'lists' && lists.selected ? lists.selected.name : ui.title}
           detail={ui.view === 'lists' ? lists.selected ? `${lists.completed} of ${lists.total} checked` : `${data.workspace.checklists.length} ${data.workspace.checklists.length === 1 ? 'list' : 'lists'}` : ui.detail}
@@ -218,14 +223,14 @@ export default function TaskSetScreen() {
           navigationOpen={ui.navigationOpen}
           navigationRef={ui.navigationRef}
           searchOpen={ui.searchOpen}
-          search={ui.search}
-          searchPlaceholder={ui.view === 'lists' ? lists.selected ? 'Search items' : 'Search lists' : undefined}
-          searchLabel={ui.view === 'lists' ? lists.selected ? 'Search items in this list' : 'Search lists and their items' : undefined}
+          search={ui.view === 'finances' ? finance.filter.search : ui.search}
+          searchPlaceholder={ui.view === 'finances' ? 'Search transactions' : ui.view === 'lists' ? lists.selected ? 'Search items' : 'Search lists' : undefined}
+          searchLabel={ui.view === 'finances' ? 'Search finance transactions' : ui.view === 'lists' ? lists.selected ? 'Search items in this list' : 'Search lists and their items' : undefined}
           searchRef={ui.searchRef}
           selecting={ui.selecting}
-          onSearchChange={ui.setSearch}
+          onSearchChange={ui.view === 'finances' ? (search) => { if (finance.tab !== 'Transactions') finance.choose('Transactions'); finance.setFilter({ search }) } : ui.setSearch}
           onOpenSearch={ui.openSearch}
-          onCloseSearch={ui.closeSearch}
+          onCloseSearch={() => { ui.closeSearch(); if (ui.view === 'finances') finance.setFilter({ search: '' }) }}
           onToggleSelecting={ui.toggleSelecting}
           onOpenNavigation={ui.openNavigation}
         />
@@ -240,7 +245,7 @@ export default function TaskSetScreen() {
           <div className="column">{!data.loading && content()}</div>
         </div>
         {/* GitHub has no composer; with nothing to float above it either, the dock would only reserve blank space. */}
-        <div className="dock" hidden={(ui.view === 'finances' || ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
+        <div className="dock" hidden={(ui.view === 'news' || ui.view === 'finances' || ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
           {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
           {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedNotesToast ? (
@@ -276,7 +281,7 @@ export default function TaskSetScreen() {
             placeholder={ui.composer.placeholder}
             label={ui.composer.label}
             draftKey={ui.view === 'meetings' ? `meeting:${openMeeting?.id ?? 'list'}:${ui.meetings.detail?.date ?? ''}` : ui.section === 'calendar' ? `calendar:${ui.calendar.selected}` : ui.section}
-            hidden={ui.selecting || ui.view === 'finances' || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
+            hidden={ui.selecting || ui.view === 'news' || ui.view === 'finances' || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
             onSend={(text) => send(text, 'text')}
           />
         </div>

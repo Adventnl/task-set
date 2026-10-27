@@ -8,6 +8,9 @@ import FinanceAccounts from '../../components/finance/FinanceAccounts'
 import FinanceSettings from '../../components/finance/FinanceSettings'
 import FinanceReports from '../../components/finance/FinanceReports'
 import FinanceBudgets from '../../components/finance/FinanceBudgets'
+import FinancePeriod from '../../components/finance/FinancePeriod'
+import { Download, RefreshCw, ShieldCheck } from 'lucide-react'
+import { financeTime } from '../../shared/utils/finance'
 const TABS: FinanceTab[] = [
   'Overview',
   'Review Inbox',
@@ -33,42 +36,98 @@ export default function FinanceScreen({
             aria-current={tab === f.tab ? 'page' : undefined}
             onClick={() => f.choose(tab)}
           >
-            {tab}
+            {tab === 'Finance Settings'
+              ? 'Settings'
+              : tab === 'Budgets & Categories'
+                ? 'Budgets'
+                : tab}
+            {tab === 'Review Inbox' && !!f.metrics?.reviewCount && (
+              <span className="finance-count">{f.metrics.reviewCount}</span>
+            )}
           </button>
         ))}
       </nav>
-      <div className="finance-actions">
-        <button
-          disabled={f.busy || !d?.configured}
-          onClick={() => void f.sync()}
-        >
-          {f.busy ? 'Working…' : 'Check available data'}
-        </button>
-        {d && <small>{d.transactionCount} retained transactions</small>}
+      <div className="finance-toolbar">
+        <div>
+          <h2>
+            {f.tab === 'Overview'
+              ? 'Your overview'
+              : f.tab === 'Finance Settings'
+                ? 'Finance settings'
+                : f.tab}
+          </h2>
+          <p>
+            {d?.lastSync
+              ? `Last synced ${financeTime(d.lastSync)}`
+              : d?.configured
+                ? 'Akahu configured · awaiting first successful sync'
+                : 'Connect your bank to get started'}
+          </p>
+        </div>
+        <div className="finance-toolbar-actions">
+          <button
+            disabled={f.busy || !d?.initialized}
+            onClick={() => void f.export('csv', 'Transaction Register')}
+          >
+            <Download size={15} aria-hidden="true" />
+            Export
+          </button>
+          <button
+            className="finance-primary"
+            disabled={f.busy || !d?.configured}
+            onClick={() => void f.sync()}
+          >
+            <RefreshCw
+              className={f.busy ? 'spin' : undefined}
+              size={15}
+              aria-hidden="true"
+            />
+            {f.busy ? 'Working…' : 'Sync accounts'}
+          </button>
+        </div>
       </div>
+      {d &&
+        ['Overview', 'Transactions', 'Review Inbox', 'Analytics'].includes(
+          f.tab,
+        ) && <FinancePeriod filter={f.filter} onFilter={f.setFilter} />}
       {f.error && (
         <p className="finance-error" role="alert">
           {f.error}
         </p>
       )}
-      {f.message && <p role="status">{f.message}</p>}
+      {f.message && (
+        <p className="finance-message" role="status">
+          {f.message}
+        </p>
+      )}
       {!d ? (
         <p>Loading private financial records…</p>
       ) : (
         <>
           {!d.initialized && (
             <article className="finance-empty">
-              <h2>Connect your financial history</h2>
-              <p>
-                {d.configured
-                  ? 'Your server has Akahu credentials. Check available data to validate access and import the available history.'
-                  : 'Configure AKAHU_APP_TOKEN and AKAHU_USER_TOKEN as backend secrets. Then check available data to import your connected accounts and available history.'}
-              </p>
-              <p>
-                Initial history imports silently. Your notes and categories are
-                stored separately from bank facts. No AI is used.
-              </p>
+              <ShieldCheck size={24} aria-hidden="true" />
+              <div>
+                <h3>
+                  {d.configured
+                    ? f.busy
+                      ? 'Importing your financial history'
+                      : 'Your bank connection is ready to import'
+                    : 'Connect your financial history'}
+                </h3>
+                <p>
+                  {d.configured
+                    ? 'The first sync imports your accounts and available transactions. If it fails, the error appears here and you can retry with Sync accounts.'
+                    : 'Add your Akahu Personal App credentials to the server to import balances and transactions.'}
+                </p>
+              </div>
             </article>
+          )}
+          {d.syncs[0]?.status === 'failed' && !f.error && (
+            <p className="finance-error" role="alert">
+              Last bank sync failed: {d.syncs[0].error} Use Sync accounts to
+              retry.
+            </p>
           )}
           {f.tab === 'Analytics' && (
             <FinanceAnalytics
@@ -77,8 +136,6 @@ export default function FinanceScreen({
               onCommand={f.command}
               metrics={f.metrics}
               categories={d.categories}
-              filter={f.filter}
-              onFilter={f.setFilter}
               onDrill={(patch) => {
                 f.choose('Transactions')
                 f.setFilter(patch)
@@ -90,8 +147,9 @@ export default function FinanceScreen({
               metrics={f.metrics}
               data={d}
               page={f.page}
-              analytics={false}
-              onReview={() => f.choose('Review Inbox')}
+              loading={f.loading}
+              onNavigate={f.choose}
+              onOpen={f.open}
               onCategory={(id) => {
                 f.choose('Transactions')
                 f.setFilter({ category: id })
@@ -100,11 +158,6 @@ export default function FinanceScreen({
           )}
           {(f.tab === 'Transactions' || f.tab === 'Review Inbox') && (
             <>
-              <h2>
-                {f.tab === 'Review Inbox'
-                  ? 'What was this transaction for?'
-                  : 'Transaction register'}
-              </h2>
               {f.tab === 'Review Inbox' && f.metrics && (
                 <p>
                   {f.metrics.reviewCount} awaiting review · Income NZ$
@@ -113,6 +166,7 @@ export default function FinanceScreen({
                 </p>
               )}
               <FinanceTransactions
+                loading={f.loading}
                 data={d}
                 page={f.page}
                 filter={

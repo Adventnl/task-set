@@ -1,5 +1,11 @@
 # Task Set design
 
+## Finance dashboard update — 27 October 2026
+
+Finance is a deliberate exception to the notes reading-column layout. Use the full workspace width with the existing shell, paper/amber tokens and dark appearance. The Stripe dashboard reference informs the hierarchy: underline section navigation, a compact sync/export toolbar and period selector, four prominent balance/cash-flow figures, then spending charts, account summaries, recent transaction rows and category/budget breakdowns. Keep setup, loading, unknown balances, failed imports and incomplete bank coverage explicit. Never fill empty charts with invented data.
+
+On phones, summary figures form two columns; panels stack into one column, transaction rows prioritise merchant and amount, and dates/advanced filters expand only when requested. Section navigation scrolls horizontally within its own strip. Preserve the main phone navigation, 44 px touch targets, keyboard focus, accessible chart amounts and private transaction dialogs. Other workspace sections retain their reading column.
+
 Status: implemented in the browser app, 26 September 2026; notes-app redesign and Archive on 27 September 2026; Calendar, Meetings, and the Tasks tabs later on 27 September 2026; a phone pass and no length limit on notes on 29 September 2026, for Mac browsers and as an installable phone app. `task.hanoryx.com` is the target address; it is not deployed yet.
 
 ## Intent
@@ -95,3 +101,8 @@ Primary navigation now reads **Notes, Lists, Calendar, GitHub, Meetings** in bot
 The full sidebar and phone drawer read **Notes, Calendar, GitHub, Lists, Tasks, Maps, Meetings** without More. The phone bottom bar remains five items: Notes, Calendar, GitHub, Lists, Meetings. Keep the existing icons, counts, focus states and touch targets.
 
 Sign-in is a separate server-rendered page with the existing paper/ink/amber palette, brand mark and system typography. Copy reads **Enter your passcode to open your private workspace.** The native form works without JavaScript; errors remain beside the password field. It contains no workspace navigation or data. Browser session verification shows **Checking access…** before the private component tree mounts, with a retry action if verification is unavailable. An expired session or sign-out unmounts the workspace. Opening/reloading now requires a connection, superseding the offline-shell description above; local saves remain available after connection loss in an already-open authenticated session.
+
+
+## AI News ? 27 October 2026
+
+AI News uses the existing reading column and theme tokens: a brief introduction, update time and morning schedule, wrapping category filters with counts, local news search, and dated story rows. Models, Apps & tools, Funding, and Industry filter without network requests. Titles and Read story open the cited source in a new tab. Source descriptions appear as plain text. Loading, empty, no matches, failed requests and partial-source warnings are explicit; existing stories remain visible during refresh errors. The composer is hidden. The phone drawer includes AI News while the compact bottom navigation remains unchanged.

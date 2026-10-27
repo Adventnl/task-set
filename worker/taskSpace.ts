@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
+import { NewsStore } from './newsStore'
 import { FinanceStore } from './finance/store'
 import { financeApi } from './finance/api'
 import { deliverPush } from './finance/push'
@@ -34,9 +35,11 @@ function requestBatch(): string {
  * to its parent (a task to its capture, a meeting note to its meeting) so deletions cascade.
  */
 export class TaskSpace extends DurableObject<Env> {
+  private news: NewsStore
   private finance: FinanceStore
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
+    this.news = new NewsStore(ctx.storage)
     this.finance = new FinanceStore(ctx.storage, env as Env & AkahuEnv)
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
     ctx.blockConcurrencyWhile(async () => {
@@ -68,6 +71,10 @@ export class TaskSpace extends DurableObject<Env> {
       }
       sql.exec('CREATE INDEX IF NOT EXISTS records_by_parent ON records (type, parent_id);')
     })
+  }
+
+  async newsDigest(refresh = false) {
+    return this.news.load(refresh)
   }
 
   async financeRequest(request: Request): Promise<Response> {

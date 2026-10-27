@@ -182,6 +182,8 @@ export function viewDetail(view: View, counts: ViewCounts): string {
   switch (view) {
     case 'lists':
       return 'Checklists for anything'
+    case 'news':
+      return 'Models, apps, and investment across AI'
     case 'finances':
       return 'Your private financial headquarters'
     case 'github':

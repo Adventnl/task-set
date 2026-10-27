@@ -336,6 +336,41 @@ describe('persistent bank synchronisation', () => {
   })
 })
 describe('Akahu boundary', () => {
+  it('reports the failing endpoint and status without exposing credentials, query parameters or upstream bodies', async () => {
+    const api = new AkahuClient(
+      env,
+      vi.fn(async () =>
+        Response.json(
+          { message: 'private upstream data fixture-user' },
+          { status: 400 },
+        ),
+      ),
+    )
+    await expect(
+      api.request('/transactions?cursor=private-cursor'),
+    ).rejects.toThrow('Endpoint: /transactions. HTTP 400.')
+    try {
+      await api.request('/me')
+    } catch (error) {
+      expect((error as Error).message).not.toMatch(
+        /fixture-user|fixture-app|private upstream|private-cursor/,
+      )
+    }
+  })
+  it('distinguishes invalid JSON from unsuccessful envelopes', async () => {
+    await expect(
+      new AkahuClient(
+        env,
+        vi.fn(async () => new Response('<html>private upstream</html>')),
+      ).request('/me'),
+    ).rejects.toThrow('Response was not a valid JSON object')
+    await expect(
+      new AkahuClient(
+        env,
+        vi.fn(async () => Response.json({ items: [] })),
+      ).request('/accounts'),
+    ).rejects.toThrow('Response did not confirm success')
+  })
   it('follows opaque cursors even after an empty page without leaking headers to another host', async () => {
     const send = vi
       .fn()

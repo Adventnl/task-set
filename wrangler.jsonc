@@ -39,6 +39,6 @@
       { "name": "AUTH_RATE_LIMIT", "namespace_id": "1947024", "simple": { "limit": 5, "period": 60 } }
     ]
   },
-  "triggers": { "crons": ["17 */4 * * *"] },
+  "triggers": { "crons": ["17 */4 * * *", "5 * * * *"] },
   "observability": { "enabled": true }
 }

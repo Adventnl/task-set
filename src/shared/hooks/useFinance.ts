@@ -11,7 +11,7 @@ import type {
   RecurringPayment,
   FinanceTransaction,
 } from '../types/finance'
-import { nzDay } from '../utils/finance'
+import { financePeriod } from '../utils/financeDashboard'
 export const EMPTY_FINANCE_FILTER: FinanceFilter = {
   search: '',
   account: '',
@@ -40,16 +40,19 @@ export function useFinance(active: boolean, signedIn: boolean) {
   const [tab, setTab] = useState<FinanceTab>('Overview'),
     [filter, setFilter] = useState<FinanceFilter>({
       ...EMPTY_FINANCE_FILTER,
-      start: nzDay(new Date()).slice(0, 7) + '-01',
+      ...financePeriod('month'),
     })
   const [transaction, setTransaction] = useState<FinanceTransaction | null>(
       null,
     ),
     [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(false),
     [error, setError] = useState(''),
     [message, setMessage] = useState('')
   const revision = useRef(0),
-    mounted = useRef(true)
+    mounted = useRef(true),
+    running = useRef(false),
+    initialSyncAttempted = useRef(false)
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -62,6 +65,7 @@ export function useFinance(active: boolean, signedIn: boolean) {
   }, [])
   useEffect(() => {
     if (!signedIn) {
+      initialSyncAttempted.current = false
       setData(null)
       setDetail(null)
       setRecurring([])
@@ -86,12 +90,17 @@ export function useFinance(active: boolean, signedIn: boolean) {
   const effective = {
     ...filter,
     review:
-      tab === 'Review Inbox' ? filter.review || 'needs-review' : filter.review,
+      filter.review === 'all'
+        ? ''
+        : tab === 'Review Inbox'
+          ? filter.review || 'needs-review'
+          : filter.review,
   }
   const filterKey = JSON.stringify(effective)
   useEffect(() => {
     if (!active || !signedIn) return
     const controller = new AbortController()
+    setLoading(true)
     void Promise.all([
       financeService.list(
         JSON.parse(filterKey) as FinanceFilter,
@@ -114,10 +123,14 @@ export function useFinance(active: boolean, signedIn: boolean) {
         if (!controller.signal.aborted)
           setError(e instanceof Error ? e.message : 'Cannot load transactions')
       })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
     return () => controller.abort()
   }, [filterKey, active, signedIn, data])
   async function run(operation: () => Promise<void>, success = '') {
-    if (busy) return
+    if (running.current) return
+    running.current = true
     setBusy(true)
     setError('')
     setMessage('')
@@ -128,13 +141,38 @@ export function useFinance(active: boolean, signedIn: boolean) {
         setMessage(success)
       }
     } catch (e) {
-      if (mounted.current)
+      if (mounted.current) {
         setError(e instanceof Error ? e.message : 'Finance operation failed')
+        // Keep partial imports and the latest sync log visible after a failed operation.
+        try {
+          await load()
+        } catch {
+          /* Preserve the original operation error. */
+        }
+      }
     } finally {
+      running.current = false
       if (mounted.current) setBusy(false)
     }
   }
+  useEffect(() => {
+    if (
+      !active ||
+      !signedIn ||
+      !data?.configured ||
+      data.initialized ||
+      initialSyncAttempted.current ||
+      running.current
+    )
+      return
+    initialSyncAttempted.current = true
+    void run(
+      () => financeService.command('sync'),
+      'Your bank accounts and available history have been imported.',
+    )
+  }, [active, signedIn, data])
   function open(id: string) {
+    if (running.current) return
     const request = ++revision.current
     void run(async () => {
       const result = await financeService.transaction(id)
@@ -162,9 +200,18 @@ export function useFinance(active: boolean, signedIn: boolean) {
     return () => window.removeEventListener('hashchange', handleLink)
   }, [active, signedIn, busy])
   function choose(next: FinanceTab) {
+    revision.current++
+    setMessage('')
     setTab(next)
-    if (next === 'Review Inbox') setFilter({ ...EMPTY_FINANCE_FILTER })
-    setFilter((f) => ({ ...f, page: 0 }))
+    setFilter((f) =>
+      next === 'Review Inbox'
+        ? { ...EMPTY_FINANCE_FILTER }
+        : next === 'Overview' ||
+            next === 'Analytics' ||
+            (tab === 'Review Inbox' && next === 'Transactions')
+          ? { ...EMPTY_FINANCE_FILTER, start: f.start, end: f.end }
+          : { ...f, page: 0 },
+    )
     setTransaction(null)
   }
   return {
@@ -177,6 +224,7 @@ export function useFinance(active: boolean, signedIn: boolean) {
     filter,
     transaction,
     busy,
+    loading,
     error,
     message,
     choose,

@@ -25,15 +25,35 @@ export function timestamp(value: unknown): string | null {
     : null
 }
 export class AkahuError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    endpoint?: string,
+    reason?: string,
+  ) {
     super(
-      status === 401 || status === 403
+      (status === 401 || status === 403
         ? 'Akahu denied access. Check server credentials and Personal App permissions.'
         : status === 429
           ? 'Akahu rate limit reached. Retry later.'
-          : 'Akahu is unavailable or returned an invalid response.',
+          : status === 400
+            ? 'Akahu rejected the request. Check Personal App token configuration and permissions.'
+            : 'Akahu is unavailable or returned an invalid response.') +
+        (endpoint
+          ? ` Endpoint: ${endpoint}. ${reason ?? `HTTP ${status}.`}`
+          : ''),
     )
   }
+}
+function bankEndpoint(path: string): string {
+  return path.startsWith('/accounts')
+    ? '/accounts'
+    : path.startsWith('/transactions/pending')
+      ? '/transactions/pending'
+      : path.startsWith('/transactions')
+        ? '/transactions'
+        : path === '/refresh'
+          ? '/refresh'
+          : '/me'
 }
 export class AkahuClient {
   constructor(
@@ -53,6 +73,8 @@ export class AkahuClient {
       throw new Error('Unsupported bank operation')
     if (!this.env.AKAHU_APP_TOKEN || !this.env.AKAHU_USER_TOKEN)
       throw new AkahuError(401)
+    // Only fixed endpoint names enter diagnostics, never query strings, bank data or upstream bodies.
+    const endpoint = bankEndpoint(path)
     let response: Response | null = null
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -67,7 +89,12 @@ export class AkahuClient {
           },
         })
       } catch {
-        if (method !== 'GET' || attempt === 2) throw new AkahuError(503)
+        if (method !== 'GET' || attempt === 2)
+          throw new AkahuError(
+            503,
+            endpoint,
+            'Network request failed or timed out.',
+          )
       }
       if (
         (response &&
@@ -78,20 +105,30 @@ export class AkahuClient {
         break
       await new Promise((resolve) => setTimeout(resolve, 250 * 4 ** attempt))
     }
-    if (!response) throw new AkahuError(503)
-    if (!response.ok) throw new AkahuError(response.status)
+    if (!response) throw new AkahuError(503, endpoint, 'No response received.')
+    if (!response.ok) throw new AkahuError(response.status, endpoint)
     let body: Record<string, unknown>
     try {
       body = object(await response.json())
     } catch {
-      throw new AkahuError(502)
+      throw new AkahuError(
+        502,
+        endpoint,
+        'Response was not a valid JSON object.',
+      )
     }
-    if (body.success !== true) throw new AkahuError(502)
+    if (body.success !== true)
+      throw new AkahuError(502, endpoint, 'Response did not confirm success.')
     return body
   }
   async list(path: string): Promise<unknown[]> {
     const body = await this.request(path)
-    if (!Array.isArray(body.items)) throw new AkahuError(502)
+    if (!Array.isArray(body.items))
+      throw new AkahuError(
+        502,
+        bankEndpoint(path),
+        'Response did not contain an items array.',
+      )
     return body.items
   }
   async *transactions(start: string, end: string): AsyncGenerator<unknown[]> {
@@ -104,11 +141,31 @@ export class AkahuClient {
         ...(cursor ? { cursor } : {}),
       })
       const body = await this.request(`/transactions?${query}`)
-      if (!Array.isArray(body.items)) throw new AkahuError(502)
+      if (!Array.isArray(body.items))
+        throw new AkahuError(
+          502,
+          '/transactions',
+          'Response did not contain an items array.',
+        )
+      if (
+        !body.cursor ||
+        typeof body.cursor !== 'object' ||
+        Array.isArray(body.cursor)
+      )
+        throw new AkahuError(
+          502,
+          '/transactions',
+          'Response did not contain a pagination cursor.',
+        )
       const next = object(body.cursor).next
-      if (next !== null && typeof next !== 'string') throw new AkahuError(502)
+      if (next !== null && typeof next !== 'string')
+        throw new AkahuError(502, '/transactions', 'Invalid pagination cursor.')
       if (typeof next === 'string' && (!next || seen.has(next)))
-        throw new AkahuError(502)
+        throw new AkahuError(
+          502,
+          '/transactions',
+          'Pagination cursor was empty or repeated.',
+        )
       yield body.items
       cursor = next as string | null
       if (cursor) seen.add(cursor)

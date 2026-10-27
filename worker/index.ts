@@ -75,6 +75,9 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
     if (expensive && !(await env.AUTH_RATE_LIMIT.limit({ key: 'finance-expensive' })).success) return json({ error: 'Too many finance requests. Retry in a minute.' }, 429)
     return space.financeRequest(request)
   }
+  if (endpoint === 'GET /api/news' || endpoint === 'POST /api/news/refresh') {
+    return json(await space.newsDigest(request.method === 'POST'))
+  }
   switch (endpoint) {
     case 'GET /api/sync': {
       const since = Number(url.searchParams.get('since') ?? '0')
@@ -111,6 +114,10 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 
 export default {
   async scheduled(_event, env, ctx): Promise<void> {
+    ctx.waitUntil(env.TASK_SPACE.getByName(WORKSPACE).newsDigest().catch(() => {
+      console.error(JSON.stringify({ event: 'news_refresh_failed' }))
+    }))
+    if (_event.cron !== '17 */4 * * *') return
     ctx.waitUntil(env.TASK_SPACE.getByName(WORKSPACE).financeSync().catch(() => {
       console.error(JSON.stringify({ event: 'finance_sync_failed' }))
     }))
