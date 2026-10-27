@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FinanceData } from '../../../shared/types/finance'
 import { financeTime } from '../../../shared/utils/finance'
+import FinanceRules from '../FinanceRules'
 export default function FinanceSettings({
   data,
   busy,
@@ -52,6 +53,10 @@ export default function FinanceSettings({
         applies outside this app.
       </p>
       <h2>Notifications</h2>
+      <details>
+        <summary>Manage automatic categorisation rules</summary>
+        <FinanceRules data={data} busy={busy} onCommand={onCommand} />
+      </details>
       <label className="finance-check">
         <input
           type="checkbox"

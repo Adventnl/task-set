@@ -1,23 +1,24 @@
 import { useState } from 'react'
+import type { FinanceReport } from '../../../shared/types/finance'
+import { financeTime } from '../../../shared/utils/finance'
 export default function FinanceReports({
   busy,
+  reports,
+  onPreview,
   onExport,
 }: {
+  onPreview: (id: string) => void
+  reports: FinanceReport[]
   busy: boolean
   onExport: (format: string, type: string) => void
 }) {
   const [type, setType] = useState('Transaction Register')
   return (
-    <section>
-      <h2>Financial register & workbook</h2>
+    <section className="finance-panel finance-reports">
+      <h2>Create a report</h2>
       <p>
-        Exports use the current transaction filters and all matching pages. Set
-        the period, account and category in Transactions first.
-      </p>
-      <p>
-        The Excel workbook includes a cash-flow summary, transaction register,
-        observed balances and category reference. Amounts are numeric and dates
-        are real spreadsheet dates in UTC. Original bank IDs remain traceable.
+        Uses the selected dates and transaction filters across all pages.
+        Workbooks are saved here so you can open or download them again.
       </p>
       <label>
         Report type
@@ -31,7 +32,6 @@ export default function FinanceReports({
             'Merchant Spending Report',
             'Transaction Register',
             'Account Balance History',
-            'Budget Versus Actual Report',
             'Recurring Payment Summary',
             'Custom Date Range Report',
           ].map((v) => (
@@ -47,10 +47,46 @@ export default function FinanceReports({
           Download Excel workbook
         </button>
       </div>
-      <p className="finance-muted">
-        Downloads contain private financial data. Store them securely. They do
-        not modify your records.
-      </p>
+      <h3>Saved reports</h3>
+      {!reports.length && (
+        <p className="finance-muted">
+          Your generated Excel workbooks and CSV reports will appear here.
+        </p>
+      )}
+      <div className="finance-report-library">
+        {reports.map((report) => (
+          <article key={report.id}>
+            <div>
+              <strong>{report.type}</strong>
+              <small>
+                {financeTime(report.createdAt)} | {report.format.toUpperCase()}{' '}
+                | {report.count} transactions
+              </small>
+              <small>
+                {report.filter.start || 'All history'} |{' '}
+                {report.filter.end || 'Latest available'}
+              </small>
+            </div>
+            <div className="finance-actions">
+              {report.saved && report.format === 'xlsx' && (
+                <button disabled={busy} onClick={() => onPreview(report.id)}>
+                  Open workbook
+                </button>
+              )}
+              {report.saved ? (
+                <a
+                  href={`/api/finance/reports/${encodeURIComponent(report.id)}`}
+                  download
+                >
+                  Download {report.format.toUpperCase()}
+                </a>
+              ) : (
+                <small>Older export - file not retained</small>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
     </section>
   )
 }

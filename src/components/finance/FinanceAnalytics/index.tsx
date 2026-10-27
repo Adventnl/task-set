@@ -23,10 +23,6 @@ export default function FinanceAnalytics({
   categories: FinanceCategory[]
   onDrill: (patch: Partial<FinanceFilter>) => void
 }) {
-  const flowMax = Math.max(
-    1,
-    ...(m?.months.flatMap((c) => [c.income, Math.abs(c.expenses)]) ?? []),
-  )
   return (
     <section aria-label="Financial analytics">
       <div className="finance-kpis">
@@ -56,7 +52,7 @@ export default function FinanceAnalytics({
           <div className="finance-panel-heading">
             <div>
               <h2>Daily spending</h2>
-              <p>Open the daily amounts to explore a date</p>
+              <p>Click a point to open its transactions</p>
             </div>
           </div>
           <FinanceSpendingChart
@@ -74,65 +70,7 @@ export default function FinanceAnalytics({
             onCategory={(id) => onDrill({ category: id })}
           />
         </article>
-        <article className="finance-panel">
-          <div className="finance-panel-heading">
-            <div>
-              <h2>Monthly cash flow</h2>
-              <p>Money in and money out · NZD</p>
-            </div>
-          </div>
-          {!m?.months.length && (
-            <p className="finance-panel-empty">
-              No recorded cash flow in this period.
-            </p>
-          )}
-          {m?.months.map((month) => (
-            <button
-              className="finance-flow-month"
-              key={month.id}
-              onClick={() =>
-                onDrill({
-                  start: month.id + '-01',
-                  end: new Date(
-                    Date.UTC(
-                      Number(month.id.slice(0, 4)),
-                      Number(month.id.slice(5)),
-                      0,
-                    ),
-                  )
-                    .toISOString()
-                    .slice(0, 10),
-                })
-              }
-            >
-              <strong>{month.id}</strong>
-              <span>
-                <span>In</span>
-                <meter
-                  aria-label={`${month.id} money in`}
-                  min="0"
-                  max={flowMax}
-                  value={Math.max(0, month.income)}
-                />
-                <strong className="finance-income">
-                  {money(month.income)}
-                </strong>
-              </span>
-              <span>
-                <span>Out</span>
-                <meter
-                  aria-label={`${month.id} money out`}
-                  min="0"
-                  max={flowMax}
-                  value={Math.max(0, month.expenses)}
-                />
-                <strong>{money(month.expenses)}</strong>
-              </span>
-              <small>Net {money(month.income - month.expenses)}</small>
-            </button>
-          ))}
-        </article>
-        <article className="finance-panel">
+        <article className="finance-panel finance-top-merchants">
           <div className="finance-panel-heading">
             <h2>Top merchants</h2>
           </div>

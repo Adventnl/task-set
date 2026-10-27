@@ -1,10 +1,10 @@
 # Task Set design
 
-## Finance dashboard update — 27 October 2026
+## Finance workflow update - 27 October 2026
 
-Finance is a deliberate exception to the notes reading-column layout. Use the full workspace width with the existing shell, paper/amber tokens and dark appearance. The Stripe dashboard reference informs the hierarchy: underline section navigation, a compact sync/export toolbar and period selector, four prominent balance/cash-flow figures, then spending charts, account summaries, recent transaction rows and category/budget breakdowns. Keep setup, loading, unknown balances, failed imports and incomplete bank coverage explicit. Never fill empty charts with invented data.
+Finance keeps the workspace paper/amber tokens and full-width canvas. Transactions is the entry view, with a saved 60-day range, a compact search field, select-page and numbered navigation at both ends of the register. Account/category filters stay in a disclosure. The all-history uncategorised inbox supports the initial classification pass. Review uses category buttons and optional notes in a modal, then Save & next advances without navigating away. Create categories inline; never seed user-facing templates. Keep receipts, AI merchant context and bank facts distinct from the user's notes.
 
-On phones, summary figures form two columns; panels stack into one column, transaction rows prioritise merchant and amount, and dates/advanced filters expand only when requested. Section navigation scrolls horizontally within its own strip. Preserve the main phone navigation, 44 px touch targets, keyboard focus, accessible chart amounts and private transaction dialogs. Other workspace sections retain their reading column.
+Overview, Analytics and Accounts use Recharts tooltips and a range brush with Reset zoom. Click a spending point to open that day's transactions; keep textual values available. Budget controls and monthly cash-flow rows are absent from the main screens. Account options are collapsed. Reports is a private library of retained CSV/Excel snapshots with a wide, scrollable sheet preview. On phones, controls wrap, charts stay within the viewport and only the workbook table or section strip scrolls horizontally. Preserve keyboard focus and 44px targets.
 
 Status: implemented in the browser app, 26 September 2026; notes-app redesign and Archive on 27 September 2026; Calendar, Meetings, and the Tasks tabs later on 27 September 2026; a phone pass and no length limit on notes on 29 September 2026, for Mac browsers and as an installable phone app. `task.hanoryx.com` is the target address; it is not deployed yet.
 

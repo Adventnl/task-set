@@ -10,22 +10,11 @@ import type {
   FinanceTab,
   RecurringPayment,
   FinanceTransaction,
+  FinanceReport,
+  FinanceWorkbookPreview,
+  FinanceReceiptMatch,
 } from '../types/finance'
-import { financePeriod } from '../utils/financeDashboard'
-export const EMPTY_FINANCE_FILTER: FinanceFilter = {
-  search: '',
-  account: '',
-  category: '',
-  review: '',
-  direction: '',
-  start: '',
-  end: '',
-  min: '',
-  max: '',
-  tag: '',
-  page: 0,
-  oldest: false,
-}
+import { EMPTY_FINANCE_FILTER } from '../utils/financePreferences'
 export function useFinance(active: boolean, signedIn: boolean) {
   const [data, setData] = useState<FinanceData | null>(null),
     [page, setPage] = useState<FinancePage>({
@@ -36,12 +25,18 @@ export function useFinance(active: boolean, signedIn: boolean) {
     })
   const [detail, setDetail] = useState<FinanceDetail | null>(null),
     [recurring, setRecurring] = useState<RecurringPayment[]>([])
+  const [reports, setReports] = useState<FinanceReport[]>([])
+  const [workbook, setWorkbook] = useState<FinanceWorkbookPreview | null>(null)
+  const [insightError, setInsightError] = useState('')
+  const [receipt, setReceipt] = useState<{
+    file: File
+    match: FinanceReceiptMatch
+  } | null>(null)
   const [metrics, setMetrics] = useState<FinanceMetrics | null>(null)
-  const [tab, setTab] = useState<FinanceTab>('Overview'),
-    [filter, setFilter] = useState<FinanceFilter>({
-      ...EMPTY_FINANCE_FILTER,
-      ...financePeriod('month'),
-    })
+  const [tab, setTab] = useState<FinanceTab>('Transactions'),
+    [filter, setFilter] = useState<FinanceFilter>(
+      () => financeService.preferences().filter,
+    )
   const [transaction, setTransaction] = useState<FinanceTransaction | null>(
       null,
     ),
@@ -52,7 +47,11 @@ export function useFinance(active: boolean, signedIn: boolean) {
   const revision = useRef(0),
     mounted = useRef(true),
     running = useRef(false),
-    initialSyncAttempted = useRef(false)
+    initialSyncAttempted = useRef(false),
+    lastAutoSync = useRef(0),
+    savedFilter = useRef(filter),
+    authorized = useRef(signedIn)
+  authorized.current = signedIn
   useEffect(() => {
     mounted.current = true
     return () => {
@@ -61,12 +60,17 @@ export function useFinance(active: boolean, signedIn: boolean) {
   }, [])
   const load = useCallback(async (signal?: AbortSignal) => {
     const next = await financeService.load(signal)
-    if (!signal?.aborted && mounted.current) setData(next)
+    if (!signal?.aborted && mounted.current && authorized.current) setData(next)
   }, [])
   useEffect(() => {
     if (!signedIn) {
       initialSyncAttempted.current = false
+      revision.current++
       setData(null)
+      setReports([])
+      setWorkbook(null)
+      setReceipt(null)
+      setInsightError('')
       setDetail(null)
       setRecurring([])
       setMetrics(null)
@@ -111,12 +115,21 @@ export function useFinance(active: boolean, signedIn: boolean) {
         controller.signal,
       ),
       financeService.recurring(controller.signal),
+      financeService.reports(controller.signal),
     ])
-      .then(([next, stats, recurring]) => {
+      .then(([next, stats, recurring, reports]) => {
         if (!controller.signal.aborted) {
+          if (!next.items.length && filter.page > 0) {
+            setFilter((f) => ({
+              ...f,
+              page: Math.max(0, Math.ceil(next.total / 50) - 1),
+            }))
+            return
+          }
           setPage(next)
           setMetrics(stats)
           setRecurring(recurring)
+          setReports(reports)
         }
       })
       .catch((e: unknown) => {
@@ -129,19 +142,20 @@ export function useFinance(active: boolean, signedIn: boolean) {
     return () => controller.abort()
   }, [filterKey, active, signedIn, data])
   async function run(operation: () => Promise<void>, success = '') {
-    if (running.current) return
+    if (running.current) return false
     running.current = true
     setBusy(true)
     setError('')
     setMessage('')
     try {
       await operation()
-      if (mounted.current) {
+      if (mounted.current && authorized.current) {
         await load()
         setMessage(success)
       }
+      return true
     } catch (e) {
-      if (mounted.current) {
+      if (mounted.current && authorized.current) {
         setError(e instanceof Error ? e.message : 'Finance operation failed')
         // Keep partial imports and the latest sync log visible after a failed operation.
         try {
@@ -150,6 +164,7 @@ export function useFinance(active: boolean, signedIn: boolean) {
           /* Preserve the original operation error. */
         }
       }
+      return false
     } finally {
       running.current = false
       if (mounted.current) setBusy(false)
@@ -171,8 +186,69 @@ export function useFinance(active: boolean, signedIn: boolean) {
       'Your bank accounts and available history have been imported.',
     )
   }, [active, signedIn, data])
+  useEffect(() => {
+    if (!active || !signedIn || !data?.configured || !data.initialized) return
+    const update = () => {
+      if (document.visibilityState === 'hidden' || running.current) return
+      const previous = Math.max(
+        Date.parse(data.lastSync ?? '') || 0,
+        lastAutoSync.current,
+      )
+      if (Date.now() - previous < 5 * 60_000) return
+      lastAutoSync.current = Date.now()
+      void run(() => financeService.command('sync'))
+    }
+    update()
+    const timer = window.setInterval(update, 60_000)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
+  }, [active, signedIn, data?.configured, data?.initialized, data?.lastSync])
+  useEffect(() => {
+    if (tab === 'Review Inbox') return
+    const overview = ['Overview', 'Analytics', 'Accounts'].includes(tab)
+    savedFilter.current = overview
+      ? { ...savedFilter.current, start: filter.start, end: filter.end }
+      : filter
+    try {
+      financeService.savePreferences(savedFilter.current)
+    } catch {
+      setMessage(
+        'Your filters apply for this session. Browser storage is unavailable, so they could not be saved for next time.',
+      )
+    }
+  }, [filter, tab])
+  useEffect(() => {
+    if (!transaction || detail?.insight || !data?.insightsAvailable) return
+    const id = transaction.id,
+      request = revision.current
+    let cancelled = false
+    setInsightError('')
+    void financeService
+      .insight(id)
+      .then((insight) => {
+        if (!cancelled && request === revision.current)
+          setDetail((current) =>
+            current?.transaction.id === id ? { ...current, insight } : current,
+          )
+      })
+      .catch((e: unknown) => {
+        if (!cancelled && request === revision.current)
+          setInsightError(
+            e instanceof Error ? e.message : 'Merchant description unavailable',
+          )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [transaction?.id, detail?.insight, data?.insightsAvailable])
   function open(id: string) {
     if (running.current) return
+    setInsightError('')
     const request = ++revision.current
     void run(async () => {
       const result = await financeService.transaction(id)
@@ -206,11 +282,17 @@ export function useFinance(active: boolean, signedIn: boolean) {
     setFilter((f) =>
       next === 'Review Inbox'
         ? { ...EMPTY_FINANCE_FILTER }
-        : next === 'Overview' ||
-            next === 'Analytics' ||
-            (tab === 'Review Inbox' && next === 'Transactions')
-          ? { ...EMPTY_FINANCE_FILTER, start: f.start, end: f.end }
-          : { ...f, page: 0 },
+        : next === 'Overview' || next === 'Analytics'
+          ? {
+              ...EMPTY_FINANCE_FILTER,
+              start: savedFilter.current.start,
+              end: savedFilter.current.end,
+            }
+          : tab === 'Review Inbox' ||
+              (next === 'Transactions' &&
+                ['Overview', 'Analytics', 'Accounts'].includes(tab))
+            ? { ...savedFilter.current, page: 0 }
+            : { ...f, page: 0 },
     )
     setTransaction(null)
   }
@@ -219,6 +301,10 @@ export function useFinance(active: boolean, signedIn: boolean) {
     page,
     detail,
     recurring,
+    reports,
+    workbook,
+    insightError,
+    receipt,
     metrics,
     tab,
     filter,
@@ -233,6 +319,39 @@ export function useFinance(active: boolean, signedIn: boolean) {
       revision.current++
       setTransaction(null)
     },
+    closeWorkbook: () => {
+      revision.current++
+      setWorkbook(null)
+    },
+    closeReceipt: () => {
+      revision.current++
+      setReceipt(null)
+    },
+    matchReceipt: (file: File) =>
+      run(async () => {
+        const request = revision.current
+        const match = await financeService.matchReceipt(file)
+        if (request === revision.current && mounted.current)
+          setReceipt({ file, match })
+      }),
+    attachMatchedReceipt: (id: string) =>
+      run(async () => {
+        if (!receipt) return
+        const request = revision.current
+        await financeService.upload(id, receipt.file)
+        const detail = await financeService.transaction(id)
+        if (request !== revision.current || !mounted.current) return
+        setReceipt(null)
+        setDetail(detail)
+        setTransaction(detail.transaction)
+      }, 'Receipt matched and attached'),
+    previewWorkbook: (id: string) =>
+      run(async () => {
+        const request = revision.current
+        const preview = await financeService.preview(id)
+        if (request === revision.current && mounted.current)
+          setWorkbook(preview)
+      }),
     setFilter: (patch: Partial<FinanceFilter>) =>
       setFilter((f) => ({ ...f, ...patch, page: patch.page ?? 0 })),
     sync: () =>
@@ -250,16 +369,52 @@ export function useFinance(active: boolean, signedIn: boolean) {
     save: (input: FinanceEdit, next: boolean) =>
       run(async () => {
         if (!transaction) return
+        const request = revision.current
         await financeService.save(transaction.id, input)
-        const nextId = next
-          ? page.items.find((t) => t.id !== transaction.id)?.id
-          : null
-        const nextDetail = nextId
-          ? await financeService.transaction(nextId)
-          : null
+        let nextDetail: FinanceDetail | null = null
+        if (next) {
+          // Query the updated inbox, so reviewed records never loop back into the queue.
+          const pending = await financeService.list({
+            ...effective,
+            review: 'needs-review',
+            page: 0,
+          })
+          const nextId = pending.items.find((t) => t.id !== transaction.id)?.id
+          if (nextId) {
+            nextDetail = await financeService.transaction(nextId)
+            await financeService.command('notifications/read', {
+              transactionId: nextId,
+            })
+          }
+        }
+        if (request !== revision.current || !mounted.current) return
         setTransaction(nextDetail?.transaction ?? null)
         setDetail(nextDetail)
+        setInsightError('')
       }, 'Review saved'),
+    createCategory: async (name: string, kind: 'expense' | 'income') => {
+      const id = crypto.randomUUID()
+      const success = await run(() =>
+        financeService.command('categories', {
+          id,
+          name: name.trim(),
+          kind,
+          hidden: false,
+          color: 'amber',
+          parentId: null,
+        }),
+      )
+      return success ? id : null
+    },
+    describe: () =>
+      run(async () => {
+        if (!transaction) return
+        const id = transaction.id,
+          request = revision.current
+        await financeService.insight(id)
+        const result = await financeService.transaction(id)
+        if (request === revision.current && mounted.current) setDetail(result)
+      }),
     push: () =>
       run(async () => {
         if (!data?.vapidPublicKey)
@@ -278,8 +433,10 @@ export function useFinance(active: boolean, signedIn: boolean) {
     upload: (file: File) =>
       run(async () => {
         if (!transaction) return
+        const request = revision.current
         await financeService.upload(transaction.id, file)
-        setDetail(await financeService.transaction(transaction.id))
+        const result = await financeService.transaction(transaction.id)
+        if (request === revision.current && mounted.current) setDetail(result)
       }, 'Receipt attached'),
     export: (format: string, type: string) =>
       run(

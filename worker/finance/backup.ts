@@ -38,7 +38,7 @@ export function backup(storage: DurableObjectStorage): Response {
       let first = true
       for (const row of snapshot.get(table)!) {
         const values = { ...row }
-        if (table === 'attachments') {
+        if (table === 'attachments' || table === 'exports') {
           if (values.bytes instanceof ArrayBuffer)
             values.bytes = bytesToBase64(values.bytes)
           else if (ArrayBuffer.isView(values.bytes))
@@ -90,7 +90,9 @@ export function restore(storage: DurableObjectStorage, value: unknown): void {
       .toArray()
       .map((c) => c.name)
     const rows = source.map((value) => {
-      const row = object(value)
+      const row = { ...object(value) }
+      // Older backups predate saved workbook binaries.
+      if (table === 'exports' && !('bytes' in row)) row.bytes = null
       if (
         Object.keys(row).length !== columns.length ||
         columns.some((name) => !(name in row))
@@ -116,7 +118,7 @@ export function restore(storage: DurableObjectStorage, value: unknown): void {
         )
           throw new Error('Invalid transaction in backup')
       }
-      if (table === 'attachments') {
+      if (table === 'attachments' || (table === 'exports' && row.bytes !== null)) {
         if (
           typeof row.bytes !== 'string' ||
           !/^[A-Za-z0-9+/]*={0,2}$/.test(row.bytes)

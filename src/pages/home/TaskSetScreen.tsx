@@ -1,6 +1,6 @@
 import NewsScreen from './NewsScreen'
 import { useNews } from '../../shared/hooks/useNews'
-import FinanceScreen from './FinanceScreen'
+import { lazy, Suspense } from 'react'
 import { useFinance } from '../../shared/hooks/useFinance'
 import { Pencil, Plus } from 'lucide-react'
 import ConfirmDialog from '../../components/app/ConfirmDialog'
@@ -39,6 +39,8 @@ import ListsScreen from './ListsScreen'
 
 const NOTES_PANEL = 'notes-panel'
 const TASKS_PANEL = 'tasks-panel'
+
+const FinanceScreen = lazy(() => import('./FinanceScreen'))
 
 export default function TaskSetScreen() {
   const appearance = useAppearance()
@@ -125,7 +127,7 @@ export default function TaskSetScreen() {
       case 'news':
         return <NewsScreen news={news} />
       case 'finances':
-        return <FinanceScreen finance={finance} />
+        return <Suspense fallback={<p>Loading finances...</p>}><FinanceScreen finance={finance} /></Suspense>
       case 'lists':
         return <ListsScreen lists={lists} confirm={ui.setConfirmation} />
       case 'map':

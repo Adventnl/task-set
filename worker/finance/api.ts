@@ -7,11 +7,13 @@ import type {
   FinanceRule,
   FinanceSettings,
 } from '../../src/shared/types/finance'
-import { json, readBody, readJson } from '../http'
+import { json, readJson } from '../http'
 import { object, text, type AkahuEnv } from './akahu'
 import type { FinanceStore } from './store'
 import { deliverPush, parseSubscription } from './push'
 import { report } from './reports'
+import { previewWorkbook } from './workbooks'
+import { readReceipt, readReceiptFacts, receiptCandidates } from './receipts'
 
 function short(value: unknown, max = 200): string {
   const s = text(value)
@@ -37,6 +39,59 @@ export async function financeApi(
     if (request.method === 'GET') {
       if (path === '/backup') return backup(storage)
       if (!path) return json(store.metadata())
+      if (path === '/reports')
+        return json(
+          storage.sql
+            .exec<{
+              id: string
+              created_at: string
+              body: string
+              saved: number
+            }>(
+              'SELECT id, created_at, body, bytes IS NOT NULL AS saved FROM finance_exports ORDER BY created_at DESC, id DESC',
+            )
+            .toArray()
+            .map((r) => ({
+              ...JSON.parse(r.body),
+              id: r.id,
+              createdAt: r.created_at,
+              saved: !!r.saved,
+            })),
+        )
+      if (path.startsWith('/reports/')) {
+        const preview = path.endsWith('/preview')
+        const row = storage.sql
+          .exec<{ body: string; bytes: ArrayBuffer | null }>(
+            'SELECT body, bytes FROM finance_exports WHERE id = ?',
+            decodeURIComponent(path.slice(9, preview ? -8 : undefined)),
+          )
+          .toArray()[0]
+        if (!row?.bytes)
+          return json(
+            {
+              error:
+                'This older export has no saved file. Generate a new report.',
+            },
+            404,
+          )
+        const format = JSON.parse(row.body).format === 'xlsx' ? 'xlsx' : 'csv'
+        if (preview) {
+          if (format !== 'xlsx')
+            throw new Error('Only Excel workbooks have a sheet preview')
+          return json(await previewWorkbook(row.bytes))
+        }
+        return new Response(row.bytes, {
+          headers: {
+            'Content-Type':
+              format === 'xlsx'
+                ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                : 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="finance-report.${format}"`,
+            'Cache-Control': 'private, no-store',
+            'X-Content-Type-Options': 'nosniff',
+          },
+        })
+      }
       if (path === '/recurring')
         return json(store.recurring(financeFilter(url)))
       if (path === '/metrics') return json(store.metrics(financeFilter(url)))
@@ -74,6 +129,7 @@ export async function financeApi(
                   id,
                 )
                 .toArray(),
+              insight: store.savedInsight(id),
             })
           : json({ error: 'Transaction not found' }, 404)
       }
@@ -102,30 +158,20 @@ export async function financeApi(
       restore(storage, await readJson(request, 8 * 1024 * 1024))
       return json({ restored: true })
     }
+    if (path === '/receipt-match') {
+      const file = await readReceipt(request),
+        facts = await readReceiptFacts(env, file)
+      const candidates = receiptCandidates(
+        facts,
+        store.transactions(financeFilter(new URL(url.origin)), true).items,
+      )
+      return json({ ...facts, candidates })
+    }
     if (path.startsWith('/receipts/')) {
       const id = decodeURIComponent(path.slice(10))
       if (!store.transaction(id))
         return json({ error: 'Transaction not found' }, 404)
-      const bytes = await readBody(request, 1024 * 1024),
-        mime = request.headers.get('content-type') ?? ''
-      if (
-        !bytes ||
-        !['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(
-          mime,
-        )
-      )
-        throw new Error('Upload a PNG, JPEG, WebP or PDF up to 1 MB')
-      const magic = Array.from(bytes.slice(0, 4)).join(',')
-      if (!(
-        (mime === 'image/png' && magic === '137,80,78,71') ||
-        (mime === 'image/jpeg' && bytes[0] === 255 && bytes[1] === 216) ||
-        (mime === 'application/pdf' && magic === '37,80,68,70') ||
-        (mime === 'image/webp' && magic === '82,73,70,70')
-      ))
-        throw new Error('File contents do not match the declared type')
-      const name = decodeURIComponent(
-        request.headers.get('x-filename') ?? 'Receipt',
-      ).slice(0, 200)
+      const { bytes, mime, name } = await readReceipt(request)
       storage.sql.exec(
         'INSERT INTO finance_attachments VALUES (?, ?, ?, ?, ?, ?)',
         crypto.randomUUID(),
@@ -138,7 +184,9 @@ export async function financeApi(
       return json({ saved: true })
     }
     const body = object(await readJson(request, 32000))
-    if (path === '/recurring') {
+    if (path === '/insight') {
+      return json(await store.describe(short(body.id)))
+    } else if (path === '/recurring') {
       store.confirmRecurring(
         short(body.id),
         bool(body.active),

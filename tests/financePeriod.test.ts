@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import FinancePeriod from '../src/components/finance/FinancePeriod'
-import { EMPTY_FINANCE_FILTER } from '../src/shared/hooks/useFinance'
+import { EMPTY_FINANCE_FILTER } from '../src/shared/utils/financePreferences'
 
 it('reveals editable custom dates and applies a preset without a dead custom-date option', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)

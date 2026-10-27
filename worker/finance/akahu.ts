@@ -4,6 +4,8 @@ import type {
   FinanceTransaction,
 } from '../../src/shared/types/finance'
 export interface AkahuEnv {
+  AI?: Env['AI']
+  OPENROUTER_API_KEY?: string
   AKAHU_APP_TOKEN?: string
   AKAHU_USER_TOKEN?: string
   VAPID_PUBLIC_KEY?: string

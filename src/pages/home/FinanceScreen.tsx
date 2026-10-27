@@ -7,7 +7,9 @@ import FinanceReview from '../../components/finance/FinanceReview'
 import FinanceAccounts from '../../components/finance/FinanceAccounts'
 import FinanceSettings from '../../components/finance/FinanceSettings'
 import FinanceReports from '../../components/finance/FinanceReports'
-import FinanceBudgets from '../../components/finance/FinanceBudgets'
+import FinanceCategories from '../../components/finance/FinanceCategories'
+import FinanceWorkbook from '../../components/finance/FinanceWorkbook'
+import FinanceReceiptMatch from '../../components/finance/FinanceReceiptMatch'
 import FinancePeriod from '../../components/finance/FinancePeriod'
 import { Download, RefreshCw, ShieldCheck } from 'lucide-react'
 import { financeTime } from '../../shared/utils/finance'
@@ -16,7 +18,7 @@ const TABS: FinanceTab[] = [
   'Review Inbox',
   'Transactions',
   'Accounts',
-  'Budgets & Categories',
+  'Categories',
   'Analytics',
   'Reports',
   'Finance Settings',
@@ -36,11 +38,7 @@ export default function FinanceScreen({
             aria-current={tab === f.tab ? 'page' : undefined}
             onClick={() => f.choose(tab)}
           >
-            {tab === 'Finance Settings'
-              ? 'Settings'
-              : tab === 'Budgets & Categories'
-                ? 'Budgets'
-                : tab}
+            {tab === 'Finance Settings' ? 'Settings' : tab}
             {tab === 'Review Inbox' && !!f.metrics?.reviewCount && (
               <span className="finance-count">{f.metrics.reviewCount}</span>
             )}
@@ -87,9 +85,16 @@ export default function FinanceScreen({
         </div>
       </div>
       {d &&
-        ['Overview', 'Transactions', 'Review Inbox', 'Analytics'].includes(
-          f.tab,
-        ) && <FinancePeriod filter={f.filter} onFilter={f.setFilter} />}
+        [
+          'Overview',
+          'Transactions',
+          'Review Inbox',
+          'Analytics',
+          'Accounts',
+          'Reports',
+        ].includes(f.tab) && (
+          <FinancePeriod filter={f.filter} onFilter={f.setFilter} />
+        )}
       {f.error && (
         <p className="finance-error" role="alert">
           {f.error}
@@ -148,6 +153,10 @@ export default function FinanceScreen({
               data={d}
               page={f.page}
               loading={f.loading}
+              onDay={(day) => {
+                f.choose('Transactions')
+                f.setFilter({ start: day, end: day })
+              }}
               onNavigate={f.choose}
               onOpen={f.open}
               onCategory={(id) => {
@@ -167,6 +176,7 @@ export default function FinanceScreen({
               )}
               <FinanceTransactions
                 loading={f.loading}
+                onReceipt={(file) => void f.matchReceipt(file)}
                 data={d}
                 page={f.page}
                 filter={
@@ -176,7 +186,7 @@ export default function FinanceScreen({
                 }
                 busy={f.busy}
                 onBulk={(ids, category) =>
-                  void f.command('bulk', { ids, category, review: 'reviewed' })
+                  f.command('bulk', { ids, category, review: 'reviewed' })
                 }
                 onFilter={f.setFilter}
                 onOpen={f.open}
@@ -184,7 +194,13 @@ export default function FinanceScreen({
             </>
           )}
           {f.tab === 'Accounts' && (
-            <FinanceAccounts data={d} busy={f.busy} onCommand={f.command} />
+            <FinanceAccounts
+              data={d}
+              filter={f.filter}
+              busy={f.busy}
+              onRefresh={() => void f.refresh()}
+              onCommand={f.command}
+            />
           )}
           {f.tab === 'Finance Settings' && (
             <FinanceSettings
@@ -199,22 +215,42 @@ export default function FinanceScreen({
           )}
           {f.tab === 'Reports' && (
             <FinanceReports
+              reports={f.reports}
+              onPreview={(id) => void f.previewWorkbook(id)}
               busy={f.busy}
               onExport={(format, type) => void f.export(format, type)}
             />
           )}
-          {f.tab === 'Budgets & Categories' && (
-            <FinanceBudgets
-              metrics={f.metrics}
-              data={d}
+          {f.tab === 'Categories' && (
+            <FinanceCategories
+              categories={d.categories.filter((c) => c.id !== 'uncategorized')}
               busy={f.busy}
               onCommand={f.command}
+            />
+          )}
+          {f.workbook && (
+            <FinanceWorkbook workbook={f.workbook} onClose={f.closeWorkbook} />
+          )}
+          {f.receipt && (
+            <FinanceReceiptMatch
+              match={f.receipt.match}
+              busy={f.busy}
+              onAttach={(id) => void f.attachMatchedReceipt(id)}
+              onClose={f.closeReceipt}
+              error={f.error}
             />
           )}
           {f.transaction && (
             <FinanceReview
               key={f.transaction.id}
               transaction={f.transaction}
+              accountLabel={d.accounts
+                .filter((a) => a.id === f.transaction?.accountId)
+                .map((a) => `${a.institution} | ${a.name} | ${a.type}`)
+                .join('')}
+              onCreateCategory={f.createCategory}
+              onDescribe={() => void f.describe()}
+              insightError={f.insightError}
               error={f.error}
               detail={f.detail}
               onUpload={(file) => void f.upload(file)}

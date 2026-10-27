@@ -1,16 +1,19 @@
 // @vitest-environment jsdom
+import {
+  EMPTY_FINANCE_FILTER,
+  financePreferences,
+} from '../src/shared/utils/financePreferences'
 import { act, createElement, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import {
-  EMPTY_FINANCE_FILTER,
-  useFinance,
-} from '../src/shared/hooks/useFinance'
+import { useFinance } from '../src/shared/hooks/useFinance'
 import { financeService } from '../src/services/financeService'
 import type {
   FinanceData,
   FinanceDetail,
+  FinanceEdit,
   FinanceMetrics,
+  FinanceTransaction,
 } from '../src/shared/types/finance'
 vi.mock('../src/services/financeService', () => ({
   financeService: {
@@ -20,6 +23,10 @@ vi.mock('../src/services/financeService', () => ({
     recurring: vi.fn(),
     transaction: vi.fn(),
     command: vi.fn(),
+    save: vi.fn(),
+    preferences: vi.fn(),
+    savePreferences: vi.fn(),
+    reports: vi.fn(),
   },
 }))
 let root: Root,
@@ -61,6 +68,11 @@ async function render() {
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   history.replaceState(null, '', '/')
+  vi.mocked(financeService.preferences).mockReturnValue(
+    financePreferences(null),
+  )
+  vi.mocked(financeService.reports).mockResolvedValue([])
+  vi.mocked(financeService.save).mockResolvedValue(undefined)
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -145,7 +157,7 @@ it('keeps an initial import error visible, reloads partial metadata, and allows 
   expect(finance.error).toBe('')
 })
 
-it('does not sync unconfigured or already imported accounts automatically', async () => {
+it('does not sync unconfigured accounts, and refreshes imported history when stale', async () => {
   await render()
   expect(financeService.command).not.toHaveBeenCalled()
   vi.mocked(financeService.load).mockResolvedValue({
@@ -159,7 +171,7 @@ it('does not sync unconfigured or already imported accounts automatically', asyn
   await act(async () => {
     root.render(createElement(Probe, { active: true }))
   })
-  expect(financeService.command).not.toHaveBeenCalled()
+  expect(financeService.command).toHaveBeenCalledWith('sync')
 })
 
 it('clears review/category restrictions for the overview and preserves transaction filters for reports', async () => {
@@ -207,6 +219,112 @@ it('coalesces repeated sync clicks before React rerenders', async () => {
     await Promise.all([finance.sync(), finance.sync()])
   })
   expect(financeService.command).toHaveBeenCalledTimes(1)
+})
+
+it('checks cached bank data every five minutes while visible and coalesces focus-triggered checks', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-10-27T00:00:00Z'))
+  vi.mocked(financeService.load).mockResolvedValue({
+    ...metadata,
+    configured: true,
+    initialized: true,
+    lastSync: new Date().toISOString(),
+  })
+  try {
+    await render()
+    expect(financeService.command).not.toHaveBeenCalled()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+    })
+    expect(financeService.command).toHaveBeenCalledExactlyOnceWith('sync')
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(financeService.command).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+const edit: FinanceEdit = {
+  category: 'user-food',
+  notes: 'My note',
+  tags: [],
+  review: 'reviewed',
+  excluded: false,
+  transferId: null,
+  refundId: null,
+  splits: [],
+  createRule: true,
+}
+it('saves to the server and advances using the updated unreviewed queue, including later list pages', async () => {
+  await render()
+  await act(async () => finance.open('first'))
+  vi.mocked(financeService.list).mockResolvedValue({
+    items: [{ id: 'remaining' } as FinanceTransaction],
+    total: 1,
+    income: 0,
+    expenses: 100,
+  })
+  await act(async () => {
+    await finance.save(edit, true)
+  })
+  expect(financeService.save).toHaveBeenCalledWith('first', edit)
+  expect(financeService.list).toHaveBeenCalledWith(
+    expect.objectContaining({ review: 'needs-review', page: 0 }),
+  )
+  expect(finance.transaction?.id).toBe('remaining')
+  expect(financeService.command).toHaveBeenCalledWith('notifications/read', {
+    transactionId: 'remaining',
+  })
+  vi.mocked(financeService.list).mockResolvedValue({
+    items: [],
+    total: 0,
+    income: 0,
+    expenses: 0,
+  })
+  await act(async () => {
+    await finance.save(edit, true)
+  })
+  expect(finance.transaction).toBeNull()
+})
+it('retains the transaction on failed save and never reopens the dialog after closing during save', async () => {
+  await render()
+  await act(async () => finance.open('first'))
+  vi.mocked(financeService.save).mockRejectedValueOnce(new Error('Offline'))
+  await act(async () => {
+    await finance.save(edit, true)
+  })
+  expect(finance.transaction?.id).toBe('first')
+  expect(finance.error).toBe('Offline')
+  let finish!: () => void
+  vi.mocked(financeService.save).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  let saving!: Promise<boolean>
+  await act(async () => {
+    saving = finance.save(edit, true)
+    finance.close()
+  })
+  await act(async () => {
+    finish()
+    await saving
+  })
+  expect(finance.transaction).toBeNull()
+})
+it('preserves the saved dashboard period when leaving the all-history review inbox', async () => {
+  await render()
+  const range = { start: finance.filter.start, end: finance.filter.end }
+  await act(async () => finance.choose('Review Inbox'))
+  expect(finance.filter.start).toBe('')
+  await act(async () => finance.choose('Overview'))
+  expect(finance.filter).toMatchObject(range)
+  expect(financeService.savePreferences).toHaveBeenLastCalledWith(
+    expect.objectContaining(range),
+  )
 })
 
 it('does not reopen a transaction after navigating away while its request is pending', async () => {

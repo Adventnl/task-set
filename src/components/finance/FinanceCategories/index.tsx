@@ -7,41 +7,48 @@ export default function FinanceCategories({
 }: {
   categories: FinanceCategory[]
   busy: boolean
-  onCommand: (path: string, value: unknown) => void
+  onCommand: (path: string, value: unknown) => Promise<boolean>
 }) {
-  const [editing, setEditing] = useState<FinanceCategory | null>(null),
-    [name, setName] = useState(''),
-    [parent, setParent] = useState(''),
-    [kind, setKind] = useState<FinanceCategory['kind']>('expense'),
-    [color, setColor] = useState('amber'),
-    [from, setFrom] = useState(''),
-    [to, setTo] = useState('')
+  const [editing, setEditing] = useState<FinanceCategory | null>(null)
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<FinanceCategory['kind']>('expense')
   return (
-    <section>
-      <h2>Categories</h2>
+    <section className="finance-panel finance-category-manager">
+      <div className="finance-panel-heading">
+        <div>
+          <h2>Your categories</h2>
+          <p>
+            Create the categories you use. They are saved to your private
+            database.
+          </p>
+        </div>
+      </div>
       <form
         className="finance-filters"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
-          onCommand('categories', {
+          const saved = await onCommand('categories', {
             id: editing?.id ?? crypto.randomUUID(),
             name: name.trim(),
             kind,
             hidden: editing?.hidden ?? false,
-            color,
-            parentId: parent || null,
+            color: editing?.color ?? 'amber',
+            parentId: editing?.parentId ?? null,
           })
-          setName('')
-          setEditing(null)
+          if (saved) {
+            setName('')
+            setEditing(null)
+          }
         }}
       >
         <label>
           Name
           <input
             required
-            aria-label="New category name"
+            maxLength={200}
             value={name}
             onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Food expenses"
           />
         </label>
         <label>
@@ -52,97 +59,61 @@ export default function FinanceCategories({
           >
             <option value="expense">Expense</option>
             <option value="income">Income</option>
-            <option value="special">Special</option>
+            <option value="special">Other</option>
           </select>
         </label>
-        <label>
-          Parent
-          <select value={parent} onChange={(e) => setParent(e.target.value)}>
-            <option value="">No parent</option>
-            {categories
-              .filter((c) => c.id !== editing?.id)
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          Colour
-          <input
-            type="color"
-            value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#b88930'}
-            onChange={(e) => setColor(e.target.value)}
-          />
-        </label>
-        <button disabled={busy}>
-          {editing ? 'Save category' : 'Add category'}
+        <button disabled={busy || !name.trim()}>
+          {editing ? 'Save category' : 'Create category'}
         </button>
+        {editing && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(null)
+              setName('')
+            }}
+          >
+            New category
+          </button>
+        )}
       </form>
-      <div className="finance-category-grid">
+      {!categories.length && (
+        <p>
+          No categories yet. You can also create one while reviewing a
+          transaction.
+        </p>
+      )}
+      <div className="finance-category-list">
         {categories.map((c) => (
-          <span key={c.id}>
+          <div key={c.id}>
             <button
-              disabled={busy}
               onClick={() => {
                 setEditing(c)
                 setName(c.name)
-                setParent(c.parentId ?? '')
                 setKind(c.kind)
-                setColor(c.color)
               }}
             >
               {c.name}
+              <small>
+                {c.kind}
+                {c.hidden ? ' - Hidden' : ''}
+              </small>
             </button>
-            <button
-              aria-label={`${c.hidden ? 'Show' : 'Hide'} ${c.name}`}
-              disabled={busy}
-              onClick={() =>
-                onCommand('categories', { ...c, hidden: !c.hidden })
-              }
-            >
-              {c.hidden ? 'Show' : 'Hide'}
-            </button>
-          </span>
+            {editing?.id === c.id && (
+              <label className="finance-check">
+                <input
+                  type="checkbox"
+                  checked={c.hidden}
+                  disabled={busy}
+                  onChange={(e) =>
+                    onCommand('categories', { ...c, hidden: e.target.checked })
+                  }
+                />
+                Hide from category choices
+              </label>
+            )}
+          </div>
         ))}
-      </div>
-      <h3>Merge categories</h3>
-      <p>
-        Choose two categories of the same type. The source is hidden;
-        transactions, splits, rules and budgets are retained.
-      </p>
-      <div className="finance-actions">
-        <select
-          aria-label="Merge from"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        >
-          <option value="">From category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Merge into"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-        >
-          <option value="">Into category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <button
-          disabled={busy || !from || !to || from === to}
-          onClick={() => onCommand('categories/merge', { from, to })}
-        >
-          Confirm category merge
-        </button>
       </div>
     </section>
   )

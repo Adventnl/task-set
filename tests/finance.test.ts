@@ -18,6 +18,9 @@ import type {
 import { report } from '../worker/finance/reports'
 import ExcelJS from 'exceljs'
 import { financeApi } from '../worker/finance/api'
+import { categoryId, DEFAULT_CATEGORIES } from '../worker/finance/schema'
+import { previewWorkbook } from '../worker/finance/workbooks'
+import { backup, restore } from '../worker/finance/backup'
 import { deliverPush, parseSubscription } from '../worker/finance/push'
 
 const filter: FinanceFilter = {
@@ -57,7 +60,7 @@ const tx = (id = 'tx_1', amount = -24.5, accountId = 'acc_1') => ({
   date: '2026-10-19T01:00:00Z',
   updated_at: '2026-10-19T03:00:00Z',
 })
-function database() {
+function database(legacyCategories = true) {
   const db = new DatabaseSync(':memory:')
   db.exec('PRAGMA foreign_keys = ON')
   const storage = {
@@ -98,7 +101,21 @@ function database() {
       }
     },
   } as unknown as DurableObjectStorage
-  return { db, storage, store: new FinanceStore(storage, env) }
+  const store = new FinanceStore(storage, env)
+  // Explicit legacy fixture categories: new workspaces no longer seed templates.
+  if (legacyCategories)
+    for (const [kind, names] of Object.entries(DEFAULT_CATEGORIES))
+      for (const name of names)
+        if (name !== 'Uncategorized')
+          store.saveCategory({
+            id: categoryId(name),
+            name,
+            kind: kind as 'income' | 'expense' | 'special',
+            hidden: false,
+            color: 'amber',
+            parentId: null,
+          })
+  return { db, storage, store }
 }
 function bank(initial: unknown[] = [tx()], pending: unknown[] = []) {
   let settled = initial,
@@ -581,6 +598,7 @@ describe('automation, attachments and report variants', () => {
       )
     ).json()
     expect(detail.attachments).toHaveLength(1)
+    expect(store.transactions(filter).items[0].receiptCount).toBe(1)
     const receipt = await financeApi(
       new Request(
         'https://app.test/api/finance/receipts/' + detail.attachments[0].id,
@@ -862,4 +880,171 @@ it('compares exact cent amount bounds rather than fractional binary products', a
   expect(
     store.transactions({ ...filter, min: '0.29', max: '0.29' }).total,
   ).toBe(1)
+})
+
+it('starts with only the internal uncategorised state and persists user-created categories across reopen', () => {
+  const { store, storage } = database(false)
+  expect(store.metadata().categories.map((c) => c.id)).toEqual([
+    'uncategorized',
+  ])
+  store.saveCategory({
+    id: 'my-food',
+    name: 'Food expenses',
+    kind: 'expense',
+    hidden: false,
+    color: 'amber',
+    parentId: null,
+  })
+  expect(
+    new FinanceStore(storage, env).metadata().categories.map((c) => c.name),
+  ).toContain('Food expenses')
+  expect(() =>
+    store.saveCategory({
+      id: 'duplicate',
+      name: ' food EXPENSES ',
+      kind: 'expense',
+      hidden: false,
+      color: 'amber',
+      parentId: null,
+    }),
+  ).toThrow('already exists')
+})
+
+it('coalesces merchant descriptions, caches abstentions and invalidates context after bank corrections', async () => {
+  const { store, storage } = database(false),
+    upstream = bank()
+  await store.sync()
+  const run = vi
+    .fn()
+    .mockResolvedValue({
+      response: { certain: false, description: null, evidence: '' },
+    })
+  const enabled = new FinanceStore(storage, {
+    ...env,
+    AI: { run } as unknown as Env['AI'],
+  })
+  await Promise.all([enabled.describe('tx_1'), enabled.describe('tx_1')])
+  await enabled.describe('tx_1')
+  expect(run).toHaveBeenCalledTimes(1)
+  expect(enabled.savedInsight('tx_1')?.description).toBeNull()
+  upstream.set([{ ...tx(), description: 'Different merchant' }])
+  await enabled.sync()
+  expect(enabled.savedInsight('tx_1')).toBeNull()
+  await enabled.describe('tx_1')
+  expect(run).toHaveBeenCalledTimes(2)
+  expect(enabled.transaction('tx_1')).toMatchObject({
+    notes: '',
+    category: 'uncategorized',
+  })
+})
+it('removes untouched unused legacy templates while retaining used and edited categories during migration', async () => {
+  const { store, storage } = database(false)
+  bank()
+  await store.sync()
+  for (const name of ['Groceries', 'Restaurants', 'Shopping']) {
+    storage.sql.exec(
+      'INSERT INTO finance_categories VALUES (?, ?)',
+      categoryId(name),
+      JSON.stringify({
+        id: categoryId(name),
+        name: name === 'Shopping' ? 'My shopping' : name,
+        kind: 'expense',
+        hidden: false,
+        color: 'amber',
+        parentId: null,
+      }),
+    )
+  }
+  store.edit('tx_1', {
+    category: 'groceries',
+    notes: '',
+    tags: [],
+    review: 'reviewed',
+    excluded: false,
+    transferId: null,
+    refundId: null,
+    splits: [],
+    createRule: false,
+  })
+  storage.sql.exec(
+    "DELETE FROM finance_settings WHERE id = 'custom-categories-v1'",
+  )
+  const reopened = new FinanceStore(storage, env)
+  expect(reopened.metadata().categories.map((c) => c.id)).toEqual(
+    expect.arrayContaining(['groceries', 'shopping', 'uncategorized']),
+  )
+  expect(reopened.metadata().categories.map((c) => c.id)).not.toContain(
+    'restaurants',
+  )
+  expect(reopened.transaction('tx_1')?.category).toBe('groceries')
+})
+it('retains exact report binaries, lists reports, previews workbook sheets and round-trips saved files in backups', async () => {
+  const { store, storage } = database()
+  bank()
+  await store.sync()
+  const first = await report(
+    store,
+    storage,
+    new URL('https://local/api/finance/export?format=xlsx'),
+  )
+  const bytes = await first.arrayBuffer()
+  const list = await financeApi(
+    new Request('https://local/api/finance/reports'),
+    store,
+    storage,
+    env,
+  )
+  const records = (await list.json()) as { id: string; saved: boolean }[]
+  expect(records).toHaveLength(1)
+  expect(records[0].saved).toBe(true)
+  const download = await financeApi(
+    new Request(`https://local/api/finance/reports/${records[0].id}`),
+    store,
+    storage,
+    env,
+  )
+  expect(new Uint8Array(await download.arrayBuffer())).toEqual(
+    new Uint8Array(bytes),
+  )
+  expect(download.headers.get('Cache-Control')).toBe('private, no-store')
+  const preview = await previewWorkbook(bytes)
+  expect(preview.sheets.map((s) => s.name)).toEqual([
+    'Summary',
+    'Transactions',
+    'Observed Balances',
+    'Categories',
+  ])
+  expect(
+    preview.sheets.find((s) => s.name === 'Transactions')?.rows[1],
+  ).toContain('Countdown')
+  const route = await financeApi(
+    new Request(`https://local/api/finance/reports/${records[0].id}/preview`),
+    store,
+    storage,
+    env,
+  )
+  expect(await route.json()).toEqual(preview)
+  const target = database(false)
+  restore(target.storage, await backup(storage).json())
+  const restored = await financeApi(
+    new Request(`https://local/api/finance/reports/${records[0].id}`),
+    target.store,
+    target.storage,
+    env,
+  )
+  expect(new Uint8Array(await restored.arrayBuffer())).toEqual(
+    new Uint8Array(bytes),
+  )
+  const old = (await backup(storage).json()) as {
+    tables: { exports: Record<string, unknown>[] }
+  }
+  for (const row of old.tables.exports) delete row.bytes
+  restore(target.storage, old)
+  const historical = await financeApi(
+    new Request('https://local/api/finance/reports'),
+    target.store,
+    target.storage,
+    env,
+  )
+  expect(await historical.json()).toMatchObject([{ saved: false }])
 })

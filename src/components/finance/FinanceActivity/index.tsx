@@ -1,4 +1,9 @@
-import { ArrowDownLeft, ArrowUpRight, ChevronRight } from 'lucide-react'
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  ChevronRight,
+  Paperclip,
+} from 'lucide-react'
 import type {
   FinanceData,
   FinanceTransaction,
@@ -11,7 +16,9 @@ export default function FinanceActivity({
   onOpen,
   selected,
   onSelect,
+  disabled = false,
 }: {
+  disabled?: boolean
   data: FinanceData
   items: FinanceTransaction[]
   onOpen: (id: string) => void
@@ -34,13 +41,18 @@ export default function FinanceActivity({
             <label className="finance-row-select">
               <input
                 type="checkbox"
+                disabled={disabled}
                 aria-label={`Select ${t.merchant}`}
                 checked={selected?.includes(t.id) ?? false}
                 onChange={(e) => onSelect(t.id, e.target.checked)}
               />
             </label>
           )}
-          <button className="finance-activity-row" onClick={() => onOpen(t.id)}>
+          <button
+            disabled={disabled}
+            className="finance-activity-row"
+            onClick={() => onOpen(t.id)}
+          >
             <span className="finance-merchant">
               <span
                 className={`finance-merchant-icon ${t.amount > 0 ? 'finance-income' : ''}`}
@@ -73,7 +85,15 @@ export default function FinanceActivity({
                 {t.amount > 0 ? '+' : ''}
                 {money(t.amount, t.currency)}
               </strong>
-              <small>{t.status}</small>
+              <small>
+                {t.status}
+                {!!t.receiptCount && (
+                  <span title="Receipt attached">
+                    <Paperclip size={12} aria-hidden="true" />
+                    <span className="sr-only">Receipt attached</span>
+                  </span>
+                )}
+              </small>
             </span>
             <ChevronRight size={16} aria-hidden="true" />
           </button>

@@ -71,6 +71,8 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
 
   const space = env.TASK_SPACE.getByName(WORKSPACE)
   if (url.pathname === '/api/finance' || url.pathname.startsWith('/api/finance/')) {
+    if (['/api/finance/insight', '/api/finance/receipt-match'].includes(url.pathname) && !(await env.AI_RATE_LIMIT.limit({ key: 'finance-insight' })).success)
+      return json({ error: 'Too many merchant descriptions. Retry in a minute.' }, 429)
     const expensive = ['/api/finance/sync', '/api/finance/refresh', '/api/finance/export'].includes(url.pathname)
     if (expensive && !(await env.AUTH_RATE_LIMIT.limit({ key: 'finance-expensive' })).success) return json({ error: 'Too many finance requests. Retry in a minute.' }, 429)
     return space.financeRequest(request)

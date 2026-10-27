@@ -12,19 +12,53 @@ import type {
   FinanceSettings,
   FinanceSync,
   FinanceTransaction,
+  FinanceInsight,
   RecurringPayment,
 } from '../../src/shared/types/finance'
 import { minorUnits, nzDay, totals } from '../../src/shared/utils/finance'
 import type { AkahuEnv } from './akahu'
 import { FinanceBookkeeping } from './bookkeeping'
 import { FinanceSynchronizer } from './synchronizer'
+import { merchantInsight } from './insights'
 type BodyRow = { body: string }
 export class FinanceStore extends FinanceBookkeeping {
   private synchronizer: FinanceSynchronizer
+  private insightRequests = new Map<string, Promise<FinanceInsight>>()
   constructor(storage: DurableObjectStorage, env: AkahuEnv) {
     super(storage, env)
     this.initialize()
     this.synchronizer = new FinanceSynchronizer(storage, env)
+  }
+  savedInsight(id: string): FinanceInsight | null {
+    const tx = this.transaction(id)
+    const cached = this.read<{ source: string; insight: FinanceInsight }>(
+      'settings',
+      `insight:${id}`,
+    )
+    return tx && cached?.source === `${tx.merchant}\n${tx.description}`
+      ? cached.insight
+      : null
+  }
+  describe(id: string): Promise<FinanceInsight> {
+    const tx = this.transaction(id)
+    if (!tx) return Promise.reject(new Error('Transaction not found'))
+    const cached = this.savedInsight(id)
+    if (cached) return Promise.resolve(cached)
+    const pending = this.insightRequests.get(id)
+    if (pending) return pending
+    const request = merchantInsight(this.env, tx)
+      .then((insight) => {
+        this.put('settings', `insight:${id}`, {
+          source: `${tx.merchant}\n${tx.description}`,
+          insight,
+        })
+        return insight
+      })
+      .finally(() => {
+        this.insightRequests.delete(id)
+      })
+    this.insightRequests.set(id, request)
+    return request
   }
   metrics(filter: FinanceFilter) {
     const all = this.transactions(
@@ -91,6 +125,7 @@ export class FinanceStore extends FinanceBookkeeping {
       )
       .one()
     return {
+      insightsAvailable: !!(this.env.AI || this.env.OPENROUTER_API_KEY),
       configured: !!(this.env.AKAHU_APP_TOKEN && this.env.AKAHU_USER_TOKEN),
       initialized: !!this.read('settings', 'initialized'),
       accounts: this.list('accounts'),
@@ -149,10 +184,22 @@ export class FinanceStore extends FinanceBookkeeping {
         .toArray()
         .map((r) => [r.transaction_id, JSON.parse(r.body) as FinanceEdit]),
     )
+    const receipts = new Map(
+      this.sql
+        .exec<{ transaction_id: string; count: number }>(
+          'SELECT transaction_id, COUNT(*) AS count FROM finance_attachments GROUP BY transaction_id',
+        )
+        .toArray()
+        .map((r) => [r.transaction_id, r.count]),
+    )
     const items = rows
       .map((r) => {
         const tx = JSON.parse(r.body) as FinanceTransaction
-        return { ...tx, ...annotations.get(tx.id) }
+        return {
+          ...tx,
+          ...annotations.get(tx.id),
+          receiptCount: receipts.get(tx.id) ?? 0,
+        }
       })
       .filter((t) => {
         const day = nzDay(t.date),

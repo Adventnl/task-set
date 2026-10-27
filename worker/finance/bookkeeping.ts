@@ -69,7 +69,15 @@ export class FinanceBookkeeping extends FinanceRepository {
         JSON.stringify(edit),
       )
       if (input.createRule) {
-        const ruleId = crypto.randomUUID()
+        const direction = tx.amount < 0 ? 'debit' : 'credit'
+        const existing = this.list<FinanceRule>('rules').find(
+          (r) =>
+            r.match === 'exact' &&
+            r.text === tx.merchant &&
+            r.accountId === null &&
+            r.direction === direction,
+        )
+        const ruleId = existing?.id ?? crypto.randomUUID()
         this.put('rules', ruleId, {
           id: ruleId,
           text: tx.merchant,
@@ -78,7 +86,7 @@ export class FinanceBookkeeping extends FinanceRepository {
           priority: 100,
           enabled: true,
           accountId: null,
-          direction: 'any',
+          direction,
         })
       }
     })
@@ -159,6 +167,17 @@ export class FinanceBookkeeping extends FinanceRepository {
     })
   }
   saveCategory(c: FinanceCategory): void {
+    if (!c.id || c.id === 'uncategorized' || !c.name.trim())
+      throw new Error('Enter a category name')
+    if (
+      this.list<FinanceCategory>('categories').some(
+        (existing) =>
+          existing.id !== c.id &&
+          existing.name.toLocaleLowerCase() ===
+            c.name.trim().toLocaleLowerCase(),
+      )
+    )
+      throw new Error('A category with this name already exists')
     const seen = new Set([c.id])
     let parent = c.parentId
     while (parent) {
@@ -169,7 +188,7 @@ export class FinanceBookkeeping extends FinanceRepository {
       if (!record) throw new Error('Invalid parent category')
       parent = record.parentId
     }
-    this.put('categories', c.id, c)
+    this.put('categories', c.id, { ...c, name: c.name.trim(), system: false })
   }
   mergeCategories(from: string, to: string): void {
     const source = this.read<FinanceCategory>('categories', from),

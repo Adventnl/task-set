@@ -17,6 +17,7 @@ export interface FinanceAccount {
   archived: boolean
 }
 export interface FinanceTransaction {
+  receiptCount?: number
   upstreamMissingAt?: string | null
   id: string
   providerId: string | null
@@ -51,6 +52,7 @@ export interface FinanceCategory {
   hidden: boolean
   color: string
   parentId: string | null
+  system?: boolean
 }
 export interface FinanceRule {
   id: string
@@ -100,6 +102,7 @@ export interface FinanceSettings {
   timezone: string
 }
 export interface FinanceData {
+  insightsAvailable?: boolean
   unreadCount: number
   configured: boolean
   initialized: boolean
@@ -153,10 +156,10 @@ export type FinanceTab =
   | 'Review Inbox'
   | 'Transactions'
   | 'Accounts'
-  | 'Budgets & Categories'
   | 'Analytics'
   | 'Reports'
   | 'Finance Settings'
+  | 'Categories'
 export interface FinanceMetrics {
   todayIncome: number
   todaySpending: number
@@ -202,4 +205,29 @@ export interface FinanceDetail {
   transaction: FinanceTransaction
   audit: { changed_at: string; before_body: string; after_body: string }[]
   attachments: FinanceAttachment[]
+  insight?: FinanceInsight | null
+}
+
+export interface FinanceInsight {
+  description: string | null
+  generatedAt: string
+}
+export interface FinanceReport {
+  id: string
+  createdAt: string
+  type: string
+  format: 'csv' | 'xlsx'
+  filter: FinanceFilter
+  count: number
+  saved: boolean
+}
+export interface FinanceWorkbookPreview {
+  sheets: { name: string; totalRows: number; rows: string[][] }[]
+}
+export interface FinanceReceiptMatch {
+  merchant: string
+  date: string
+  amount: number
+  currency: string
+  candidates: FinanceTransaction[]
 }

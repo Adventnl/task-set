@@ -6,7 +6,7 @@ import type {
 import { nzDay } from './finance'
 
 export type FinancePeriod =
-  'month' | '7' | '30' | '90' | '180' | '365' | 'year' | 'all'
+  'month' | '7' | '30' | '60' | '90' | '180' | '365' | 'year' | 'all'
 
 export function financePeriod(
   period: FinancePeriod,

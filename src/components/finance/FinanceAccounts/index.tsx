@@ -1,18 +1,39 @@
 import FinanceBalanceChart from '../FinanceBalanceChart'
-import type { FinanceData } from '../../../shared/types/finance'
-import { financeTime, money } from '../../../shared/utils/finance'
+import type { FinanceData, FinanceFilter } from '../../../shared/types/finance'
+import { financeTime, money, nzDay } from '../../../shared/utils/finance'
 export default function FinanceAccounts({
   data,
   busy,
   onCommand,
+  onRefresh,
+  filter,
 }: {
+  filter: FinanceFilter
+  onRefresh: () => void
   data: FinanceData
   busy: boolean
   onCommand: (path: string, value: unknown) => void
 }) {
   return (
-    <section>
-      <h2>Connected accounts</h2>
+    <section className="finance-accounts">
+      <div className="finance-panel-heading">
+        <h2>Connected accounts</h2>
+        <button
+          disabled={
+            busy ||
+            !data.configured ||
+            (!!data.refreshRequestedAt &&
+              Date.now() - Date.parse(data.refreshRequestedAt) < 3600000)
+          }
+          onClick={onRefresh}
+        >
+          Request bank refresh
+        </button>
+      </div>
+      <p className="finance-muted">
+        Balances are current. The selected period filters observations. Banks
+        limit forced refreshes to once an hour.
+      </p>
       {!data.accounts.length && (
         <p>
           No accounts imported yet. Configure your server credentials, then
@@ -22,34 +43,37 @@ export default function FinanceAccounts({
       {data.accounts.map((a) => (
         <article className="finance-account" key={a.id}>
           <h3>{a.name}</h3>
-          <div className="finance-actions">
-            <button
-              disabled={busy}
-              onClick={() =>
-                onCommand('accounts', {
-                  id: a.id,
-                  included: !a.included,
-                  archived: a.archived,
-                })
-              }
-            >
-              {a.included
-                ? 'Exclude from balance totals'
-                : 'Include in balance totals'}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() =>
-                onCommand('accounts', {
-                  id: a.id,
-                  included: a.included,
-                  archived: !a.archived,
-                })
-              }
-            >
-              {a.archived ? 'Restore account' : 'Archive account'}
-            </button>
-          </div>
+          <details>
+            <summary>Account options</summary>
+            <div className="finance-actions">
+              <button
+                disabled={busy}
+                onClick={() =>
+                  onCommand('accounts', {
+                    id: a.id,
+                    included: !a.included,
+                    archived: a.archived,
+                  })
+                }
+              >
+                {a.included
+                  ? 'Exclude from balance totals'
+                  : 'Include in balance totals'}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  onCommand('accounts', {
+                    id: a.id,
+                    included: a.included,
+                    archived: !a.archived,
+                  })
+                }
+              >
+                {a.archived ? 'Restore account' : 'Archive account'}
+              </button>
+            </div>
+          </details>
           <p>
             {a.institution} · {a.type} · {a.masked} · {a.status}
           </p>
@@ -65,7 +89,14 @@ export default function FinanceAccounts({
             Application observed: {financeTime(a.syncedAt)}
           </p>
           <FinanceBalanceChart
-            balances={data.balances.filter((b) => b.accountId === a.id)}
+            balances={data.balances.filter(
+              (b) =>
+                b.accountId === a.id &&
+                (!filter.start ||
+                  nzDay(b.reportedAt ?? b.observedAt) >= filter.start) &&
+                (!filter.end ||
+                  nzDay(b.reportedAt ?? b.observedAt) <= filter.end),
+            )}
           />
           <details>
             <summary>Observed balance history</summary>

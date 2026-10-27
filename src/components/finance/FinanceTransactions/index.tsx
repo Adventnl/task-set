@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   FinanceData,
   FinanceFilter,
   FinancePage,
 } from '../../../shared/types/finance'
+import FinancePagination from '../FinancePagination'
 import { money } from '../../../shared/utils/finance'
 import FinanceActivity from '../FinanceActivity'
 
@@ -14,6 +15,7 @@ export default function FinanceTransactions({
   onFilter,
   onOpen,
   onBulk,
+  onReceipt,
   busy,
   loading,
 }: {
@@ -24,7 +26,8 @@ export default function FinanceTransactions({
   loading: boolean
   onFilter: (patch: Partial<FinanceFilter>) => void
   onOpen: (id: string) => void
-  onBulk: (ids: string[], category: string) => void
+  onReceipt: (file: File) => void
+  onBulk: (ids: string[], category: string) => Promise<boolean>
 }) {
   const [selected, setSelected] = useState<string[]>([])
   const [bulkCategory, setBulkCategory] = useState('')
@@ -33,6 +36,8 @@ export default function FinanceTransactions({
     page.items.some((t) => t.id === id),
   )
   const advancedCount = [
+    filter.account,
+    filter.category,
     filter.review,
     filter.direction,
     filter.min,
@@ -40,15 +45,88 @@ export default function FinanceTransactions({
     filter.tag,
     filter.oldest,
   ].filter(Boolean).length
+  const filterKey = JSON.stringify(filter)
+  useEffect(() => {
+    setSelected([])
+  }, [filterKey])
   return (
     <section
       className="finance-panel finance-register"
       aria-label="Transaction explorer"
       aria-busy={loading}
     >
+      <div className="finance-mail-toolbar">
+        <div className="finance-mail-selection">
+          <label className="finance-check">
+            <input
+              type="checkbox"
+              aria-label="Select all transactions on this page"
+              disabled={loading || !page.items.length}
+              checked={
+                !!page.items.length &&
+                visibleSelected.length === page.items.length
+              }
+              ref={(input) => {
+                if (input)
+                  input.indeterminate =
+                    visibleSelected.length > 0 &&
+                    visibleSelected.length < page.items.length
+              }}
+              onChange={(e) =>
+                setSelected(e.target.checked ? page.items.map((t) => t.id) : [])
+              }
+            />
+            {visibleSelected.length
+              ? `${visibleSelected.length} selected`
+              : 'Select page'}
+          </label>
+          <label className="finance-upload-button">
+            Match receipt
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={busy}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) onReceipt(file)
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </div>
+        <div className="finance-actions">
+          <button
+            aria-pressed={
+              !filter.category && (!filter.review || filter.review === 'all')
+            }
+            onClick={() => onFilter({ category: '', review: 'all' })}
+          >
+            All transactions
+          </button>
+          <button
+            aria-pressed={filter.category === 'uncategorized'}
+            onClick={() =>
+              onFilter({
+                category: 'uncategorized',
+                review: 'all',
+                start: '',
+                end: '',
+              })
+            }
+          >
+            Uncategorised - all history
+          </button>
+          <button
+            aria-pressed={filter.review === 'needs-review'}
+            onClick={() => onFilter({ category: '', review: 'needs-review' })}
+          >
+            Needs review
+          </button>
+        </div>
+      </div>
       <div className="finance-filters finance-quick-filters">
         <label>
-          Search
+          <span className="sr-only">Search</span>
           <input
             type="search"
             value={filter.search}
@@ -56,40 +134,41 @@ export default function FinanceTransactions({
             placeholder="Merchant, description or notes"
           />
         </label>
-        <label>
-          Account
-          <select
-            value={filter.account}
-            onChange={(e) => onFilter({ account: e.target.value })}
-          >
-            <option value="">All accounts</option>
-            {data.accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Category
-          <select
-            value={filter.category}
-            onChange={(e) => onFilter({ category: e.target.value })}
-          >
-            <option value="">All categories</option>
-            {data.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <details className="finance-advanced-filters">
         <summary>
-          More filters{advancedCount ? ` (${advancedCount} active)` : ''}
+          Filters{advancedCount ? ` (${advancedCount} active)` : ''}
         </summary>
         <div className="finance-filters">
+          <label>
+            Account
+            <select
+              value={filter.account}
+              onChange={(e) => onFilter({ account: e.target.value })}
+            >
+              <option value="">All accounts</option>
+              {data.accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Category
+            <select
+              value={filter.category}
+              onChange={(e) => onFilter({ category: e.target.value })}
+            >
+              <option value="">All categories</option>
+              {data.categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label>
             Review
             <select
@@ -159,6 +238,12 @@ export default function FinanceTransactions({
           In {money(page.income)} · Out {money(page.expenses)}
         </span>
       </div>
+      <FinancePagination
+        page={filter.page}
+        total={page.total}
+        loading={loading}
+        onPage={(page) => onFilter({ page })}
+      />
       {!!visibleSelected.length && (
         <div className="finance-actions finance-bulk-actions">
           <select
@@ -175,9 +260,8 @@ export default function FinanceTransactions({
           </select>
           <button
             disabled={busy || loading}
-            onClick={() => {
-              onBulk(visibleSelected, bulkCategory)
-              setSelected([])
+            onClick={async () => {
+              if (await onBulk(visibleSelected, bulkCategory)) setSelected([])
             }}
           >
             Mark {visibleSelected.length} reviewed
@@ -196,6 +280,7 @@ export default function FinanceTransactions({
       ) : (
         <FinanceActivity
           data={data}
+          disabled={loading || busy}
           items={page.items}
           onOpen={onOpen}
           selected={visibleSelected}
@@ -206,23 +291,12 @@ export default function FinanceTransactions({
           }
         />
       )}
-      <div className="finance-pagination">
-        <span>Page {filter.page + 1}</span>
-        <div>
-          <button
-            disabled={loading || filter.page === 0}
-            onClick={() => onFilter({ page: filter.page - 1 })}
-          >
-            Previous
-          </button>
-          <button
-            disabled={loading || (filter.page + 1) * 50 >= page.total}
-            onClick={() => onFilter({ page: filter.page + 1 })}
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      <FinancePagination
+        page={filter.page}
+        total={page.total}
+        loading={loading}
+        onPage={(page) => onFilter({ page })}
+      />
       <p className="finance-footnote">
         Totals use settled NZD transactions, exclude confirmed transfers and
         offset matched refunds. Pending payments remain separate.

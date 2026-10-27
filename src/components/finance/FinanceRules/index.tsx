@@ -10,7 +10,7 @@ export default function FinanceRules({
   onCommand: (path: string, value: unknown) => void
 }) {
   const [text, setText] = useState(''),
-    [category, setCategory] = useState('groceries'),
+    [category, setCategory] = useState(''),
     [match, setMatch] = useState<FinanceRule['match']>('contains'),
     [direction, setDirection] = useState<FinanceRule['direction']>('any'),
     [account, setAccount] = useState(''),
@@ -60,14 +60,18 @@ export default function FinanceRules({
         <label>
           Category
           <select
+            required
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
-            {data.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            <option value="">Choose your category</option>
+            {data.categories
+              .filter((c) => c.id !== 'uncategorized' && !c.hidden)
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
           </select>
         </label>
         <label>
@@ -101,7 +105,7 @@ export default function FinanceRules({
             onChange={(e) => setPriority(Number(e.target.value))}
           />
         </label>
-        <button disabled={busy}>Approve rule</button>
+        <button disabled={busy || !category}>Approve rule</button>
       </form>
       {data.rules.map((r) => (
         <p key={r.id}>

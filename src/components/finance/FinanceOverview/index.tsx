@@ -19,7 +19,9 @@ export default function FinanceOverview({
   onNavigate,
   onOpen,
   onCategory,
+  onDay,
 }: {
+  onDay: (day: string) => void
   data: FinanceData
   metrics: FinanceMetrics | null
   page: FinancePage
@@ -85,7 +87,7 @@ export default function FinanceOverview({
               Loading spending…
             </div>
           ) : (
-            <FinanceSpendingChart metrics={metrics} />
+            <FinanceSpendingChart metrics={metrics} onDay={onDay} />
           )}
         </article>
         <article className="finance-panel">
@@ -185,9 +187,9 @@ export default function FinanceOverview({
             <h2>Spending by category</h2>
             <button
               className="finance-link"
-              onClick={() => onNavigate('Budgets & Categories')}
+              onClick={() => onNavigate('Categories')}
             >
-              Budgets <ArrowRight size={14} aria-hidden="true" />
+              Categories <ArrowRight size={14} aria-hidden="true" />
             </button>
           </div>
           {loading ? (
@@ -200,36 +202,6 @@ export default function FinanceOverview({
               onCategory={onCategory}
             />
           )}
-          {data.budgets
-            .filter((b) => !b.archived)
-            .slice(0, 2)
-            .map((b) => {
-              const usage = metrics?.budgetUsage.find((u) => u.id === b.id)
-              return (
-                <button
-                  className="finance-category-row finance-budget-row"
-                  key={b.id}
-                  onClick={() => onNavigate('Budgets & Categories')}
-                >
-                  <span>
-                    {b.category
-                      ? data.categories.find((c) => c.id === b.category)?.name
-                      : 'Overall budget'}
-                    <small>{b.period}</small>
-                  </span>
-                  <meter
-                    aria-label="Budget used"
-                    min="0"
-                    max={b.amount}
-                    value={Math.max(0, usage?.spent ?? 0)}
-                  />
-                  <small>
-                    {money(usage?.spent ?? 0)} of {money(b.amount)}
-                    {usage && usage.spent > b.amount ? ' · Over budget' : ''}
-                  </small>
-                </button>
-              )
-            })}
         </article>
       </div>
       <p className="finance-footnote">

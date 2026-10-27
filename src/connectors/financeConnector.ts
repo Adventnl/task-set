@@ -6,8 +6,63 @@ import type {
   FinanceMetrics,
   FinancePage,
   RecurringPayment,
+  FinanceReport,
+  FinanceInsight,
+  FinanceWorkbookPreview,
+  FinanceReceiptMatch,
 } from '../shared/types/finance'
 import { requestJson } from '../shared/utils/http'
+import type { FinancePreferences } from '../shared/utils/financePreferences'
+
+export function readFinancePreferences(): unknown {
+  try {
+    return JSON.parse(
+      localStorage.getItem('taskset.finance.preferences.v1') ?? 'null',
+    )
+  } catch {
+    return null
+  }
+}
+export function writeFinancePreferences(value: FinancePreferences): void {
+  localStorage.setItem('taskset.finance.preferences.v1', JSON.stringify(value))
+}
+export async function getFinanceReports(
+  signal?: AbortSignal,
+): Promise<FinanceReport[]> {
+  return (await requestJson('/api/finance/reports', {
+    signal,
+  })) as FinanceReport[]
+}
+export async function getFinanceWorkbookPreview(
+  id: string,
+): Promise<FinanceWorkbookPreview> {
+  return (await requestJson(
+    `/api/finance/reports/${encodeURIComponent(id)}/preview`,
+  )) as FinanceWorkbookPreview
+}
+export async function generateFinanceInsight(
+  id: string,
+): Promise<FinanceInsight> {
+  return (await requestJson('/api/finance/insight', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  })) as FinanceInsight
+}
+export async function matchFinanceReceipt(
+  file: File,
+): Promise<FinanceReceiptMatch> {
+  if (file.size > 1024 * 1024)
+    throw new Error('Receipts must be 1 MB or smaller')
+  return (await requestJson('/api/finance/receipt-match', {
+    method: 'POST',
+    headers: {
+      'Content-Type': file.type,
+      'X-Filename': encodeURIComponent(file.name),
+    },
+    body: file,
+  })) as FinanceReceiptMatch
+}
 export function financeQuery(filter: FinanceFilter): string {
   return new URLSearchParams(
     Object.entries(filter).map(([k, v]) => [k, String(v)]),
