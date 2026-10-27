@@ -8,6 +8,7 @@ export interface HeaderAction {
   label: string
   icon: LucideIcon
   onClick: () => void
+  disabled?: boolean
 }
 
 /**
@@ -87,7 +88,7 @@ export default function WorkspaceHeader({
       </div>
       <div className="workspace-tools">
         {action && (
-          <button className="icon-button" type="button" onClick={action.onClick} aria-label={action.label} title={action.label}>
+          <button className="icon-button" type="button" onClick={action.onClick} disabled={action.disabled} aria-label={action.label} title={action.label}>
             <action.icon size={18} />
           </button>
         )}

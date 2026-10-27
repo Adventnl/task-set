@@ -126,7 +126,7 @@ describe('Lists', () => {
   })
 
   it('shows all sections in sidebar order and keeps the phone bar compact', () => {
-    expect(SIDEBAR_SECTIONS).toEqual(['feed', 'calendar', 'github', 'lists', 'tasks', 'map', 'meetings', 'finances', 'news'])
+    expect(SIDEBAR_SECTIONS).toEqual(['feed', 'mail', 'calendar', 'github', 'lists', 'tasks', 'map', 'meetings', 'finances', 'news'])
     expect(PRIMARY_SECTIONS).toEqual(['feed', 'calendar', 'github', 'lists', 'meetings'])
     expect(sectionOf('lists')).toBe('lists')
     expect(sectionOf('archive')).toBe('tasks')

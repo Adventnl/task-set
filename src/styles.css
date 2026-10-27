@@ -687,6 +687,32 @@ legend {
   margin-top: var(--space-4);
 }
 
+/* ---------- Mail ---------- */
+.mail-screen { padding-bottom: var(--space-5); }
+.mail-screen .tabs { width: 100%; margin: 0; }
+.mail-screen .tab { min-height: var(--touch); }
+.mail-toolbar, .mail-account-heading, .mail-account-actions { display: flex; align-items: center; gap: var(--space-3); }
+.mail-toolbar { justify-content: space-between; flex-wrap: wrap; padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.mail-toolbar p { flex: 1 1 240px; }
+.mail-toolbar .button { flex-shrink: 0; }
+.mail-inbox-toolbar { display: grid; gap: var(--space-2); padding-top: var(--space-5); }
+.mail-inbox-toolbar select { max-width: 100%; }
+.mail-empty > svg { color: var(--text-muted); margin-bottom: var(--space-3); }
+.mail-empty > .button { margin-top: var(--space-5); }
+.mail-accounts { list-style: none; padding: 0; margin: 0; }
+.mail-account { padding: var(--space-5) 0; border-bottom: 1px solid var(--line); }
+.mail-account-heading { align-items: flex-start; justify-content: space-between; }
+.mail-account-identity { min-width: 0; overflow-wrap: anywhere; }
+.mail-account-identity h3 { margin: 0; font-size: var(--text-md); font-weight: 650; }
+.mail-account-identity p { color: var(--text-secondary); font-size: var(--text-sm); margin-top: var(--space-1); }
+.mail-account-actions { gap: var(--space-1); flex-shrink: 0; }
+.mail-provider-details { margin: var(--space-3) 0; }
+.mail-provider-details summary { cursor: pointer; color: var(--text-secondary); padding: var(--space-3) 0; min-height: var(--touch); }
+.mail-setup-guide { color: var(--text-secondary); overflow-wrap: anywhere; }
+.mail-setup-guide ol { padding-left: var(--space-5); margin: var(--space-3) 0; }
+.mail-setup-guide li + li { margin-top: var(--space-2); }
+.mail-setup-guide .button, .mail-account > .button { white-space: normal; text-align: left; }
+
 /* ---------- Notes ---------- */
 
 .feed-day + .feed-day {

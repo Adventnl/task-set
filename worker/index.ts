@@ -70,6 +70,7 @@ async function route(request: Request, env: Env, url: URL): Promise<Response> {
   if (endpoint === 'GET /api/github') return githubProxy(request, env as Env & GitHubEnv)
 
   const space = env.TASK_SPACE.getByName(WORKSPACE)
+  if (url.pathname === '/api/mail' || url.pathname.startsWith('/api/mail/')) return space.mailRequest(request)
   if (url.pathname === '/api/finance' || url.pathname.startsWith('/api/finance/')) {
     if (['/api/finance/insight', '/api/finance/receipt-match'].includes(url.pathname) && !(await env.AI_RATE_LIMIT.limit({ key: 'finance-insight' })).success)
       return json({ error: 'Too many merchant descriptions. Retry in a minute.' }, 429)

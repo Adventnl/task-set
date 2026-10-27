@@ -82,7 +82,7 @@ export function useWorkspaceView(data: WorkspaceData) {
   }, [navigationOpen])
 
   function openSearch() {
-    if (view !== 'lists' && view !== 'finances') setView('feed')
+    if (view !== 'lists' && view !== 'finances' && view !== 'mail') setView('feed')
     setSearchOpen(true)
     requestAnimationFrame(() => searchRef.current?.focus())
   }
@@ -164,6 +164,7 @@ export function useWorkspaceView(data: WorkspaceData) {
     map: 0,
     finances: 0,
     news: 0,
+    mail: 0,
   }
   const shownMeeting = view === 'meetings' ? meetings.meeting : null
   useLayoutEffect(() => {

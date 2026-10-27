@@ -1,5 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { NewsStore } from './newsStore'
+import { MailStore } from './mailStore'
+import { mailApi } from './mailApi'
 import { FinanceStore } from './finance/store'
 import { financeApi } from './finance/api'
 import { deliverPush } from './finance/push'
@@ -37,10 +39,12 @@ function requestBatch(): string {
 export class TaskSpace extends DurableObject<Env> {
   private news: NewsStore
   private finance: FinanceStore
+  private mail: MailStore
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.news = new NewsStore(ctx.storage)
     this.finance = new FinanceStore(ctx.storage, env as Env & AkahuEnv)
+    this.mail = new MailStore(ctx.storage.sql)
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
     ctx.blockConcurrencyWhile(async () => {
       const sql = this.ctx.storage.sql
@@ -75,6 +79,10 @@ export class TaskSpace extends DurableObject<Env> {
 
   async newsDigest(refresh = false) {
     return this.news.load(refresh)
+  }
+
+  async mailRequest(request: Request): Promise<Response> {
+    return mailApi(request, this.mail)
   }
 
   async financeRequest(request: Request): Promise<Response> {

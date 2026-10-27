@@ -1,5 +1,7 @@
 # Task Set: product and build plan
 
+Mail infrastructure (27 October 2026): add a **Mail** workspace section for one unified inbox across multiple Gmail, Proton Mail and Purelymail/custom-domain mailboxes. The first stage persists a shared account setup registry and provides provider-specific connection guidance. Saved accounts are explicitly **Setup required**; live authorization, ingestion, reading and sending are not implemented yet. See [Mail](mail.md) for the current boundary and next connection steps.
+
 Finance workflow revision (27 October 2026): Finance opens on a transaction register with saved browser filters and a 60-day initial period. Use the all-history inbox for classification, category-button modals with Save & next, interactive date charts, clear accounts and a private Excel/CSV report library. Budget controls are removed from the main UI. Reuse the authenticated Worker/SQLite path, expose actual errors and preserve bank facts. AI merchant context and receipt-photo matching remain separate from the user's categories and notes. See [Finance](finance.md) for calculation and live-verification limits.
 
 Status: revised 28 September 2026. Phases 1–4 are implemented as one installable web app for Mac and phone, with live sync and explicitly requested task generation, plus a Calendar and Meetings (see [Calendar and meetings](#calendar-and-meetings)). `task.hanoryx.com` is the intended host name; deployment has not been completed.

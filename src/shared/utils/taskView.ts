@@ -180,6 +180,8 @@ export interface ViewCounts {
 /** The line under a view's title. */
 export function viewDetail(view: View, counts: ViewCounts): string {
   switch (view) {
+    case 'mail':
+      return 'Your mail, across accounts'
     case 'lists':
       return 'Checklists for anything'
     case 'news':

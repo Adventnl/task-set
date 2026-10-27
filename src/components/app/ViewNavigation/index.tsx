@@ -1,7 +1,8 @@
-import { Newspaper, Wallet, CalendarDays, GitPullRequest, ListChecks, ListTodo, MapPin, NotebookText, Users, type LucideIcon } from 'lucide-react'
+import { Mail, Newspaper, Wallet, CalendarDays, GitPullRequest, ListChecks, ListTodo, MapPin, NotebookText, Users, type LucideIcon } from 'lucide-react'
 import { PRIMARY_SECTIONS, SIDEBAR_SECTIONS, VIEW_LABELS, type Section } from '../../../shared/config/views'
 
 const items: Record<Section, { icon: LucideIcon; countLabel: string }> = {
+  mail: { icon: Mail, countLabel: 'unread messages' },
   news: { icon: Newspaper, countLabel: 'stories' },
   feed: { icon: NotebookText, countLabel: 'notes' },
   lists: { icon: ListChecks, countLabel: 'lists' },

@@ -36,6 +36,8 @@ import MapScreen from './MapScreen'
 import { useMapView } from '../../shared/hooks/useMapView'
 import { useListsView } from '../../shared/hooks/useListsView'
 import ListsScreen from './ListsScreen'
+import MailScreen from './MailScreen'
+import { useMail } from '../../shared/hooks/useMail'
 
 const NOTES_PANEL = 'notes-panel'
 const TASKS_PANEL = 'tasks-panel'
@@ -54,6 +56,7 @@ export default function TaskSetScreen() {
   const finance = useFinance(ui.view === 'finances', data.sync.status !== 'signed-out' && !data.loading)
   const news = useNews(ui.view === 'news', data.sync.status !== 'signed-out' && !data.loading)
   const github = useGitHub(ui.view === 'github', data.sync.status !== 'signed-out')
+  const mail = useMail(ui.view === 'mail', data.sync.status !== 'signed-out' && !data.loading, ui.view === 'mail' ? ui.search : '')
 
   /** A note shows itself in Notes; calendar and meeting entries stay where they were added. */
   const send = (text: string, kind: Capture['kind']) => {
@@ -113,7 +116,9 @@ export default function TaskSetScreen() {
   const editor = ui.editor
   const openMeeting = ui.view === 'meetings' ? ui.meetings.meeting : null
   const headerAction: HeaderAction | undefined =
-    ui.view === 'lists'
+    ui.view === 'mail'
+      ? { label: 'Add account', icon: Plus, onClick: () => mail.openEditor(), disabled: mail.accounts === null || mail.loading || mail.busy }
+      : ui.view === 'lists'
       ? { label: 'New list', icon: Plus, onClick: lists.startNew }
       : ui.view !== 'meetings'
       ? undefined
@@ -124,6 +129,8 @@ export default function TaskSetScreen() {
 
   function content() {
     switch (ui.view) {
+      case 'mail':
+        return <MailScreen mail={mail} confirm={ui.setConfirmation} onClearSearch={ui.closeSearch} />
       case 'news':
         return <NewsScreen news={news} />
       case 'finances':
@@ -226,12 +233,12 @@ export default function TaskSetScreen() {
           navigationRef={ui.navigationRef}
           searchOpen={ui.searchOpen}
           search={ui.view === 'finances' ? finance.filter.search : ui.search}
-          searchPlaceholder={ui.view === 'finances' ? 'Search transactions' : ui.view === 'lists' ? lists.selected ? 'Search items' : 'Search lists' : undefined}
-          searchLabel={ui.view === 'finances' ? 'Search finance transactions' : ui.view === 'lists' ? lists.selected ? 'Search items in this list' : 'Search lists and their items' : undefined}
+          searchPlaceholder={ui.view === 'mail' ? 'Search mail accounts' : ui.view === 'finances' ? 'Search transactions' : ui.view === 'lists' ? lists.selected ? 'Search items' : 'Search lists' : undefined}
+          searchLabel={ui.view === 'mail' ? 'Search mail accounts' : ui.view === 'finances' ? 'Search finance transactions' : ui.view === 'lists' ? lists.selected ? 'Search items in this list' : 'Search lists and their items' : undefined}
           searchRef={ui.searchRef}
           selecting={ui.selecting}
-          onSearchChange={ui.view === 'finances' ? (search) => { if (finance.tab !== 'Transactions') finance.choose('Transactions'); finance.setFilter({ search }) } : ui.setSearch}
-          onOpenSearch={ui.openSearch}
+          onSearchChange={ui.view === 'mail' ? (search) => { mail.choose('accounts'); ui.setSearch(search) } : ui.view === 'finances' ? (search) => { if (finance.tab !== 'Transactions') finance.choose('Transactions'); finance.setFilter({ search }) } : ui.setSearch}
+          onOpenSearch={() => { if (ui.view === 'mail') mail.choose('accounts'); ui.openSearch() }}
           onCloseSearch={() => { ui.closeSearch(); if (ui.view === 'finances') finance.setFilter({ search: '' }) }}
           onToggleSelecting={ui.toggleSelecting}
           onOpenNavigation={ui.openNavigation}
@@ -247,7 +254,7 @@ export default function TaskSetScreen() {
           <div className="column">{!data.loading && content()}</div>
         </div>
         {/* GitHub has no composer; with nothing to float above it either, the dock would only reserve blank space. */}
-        <div className="dock" hidden={(ui.view === 'news' || ui.view === 'finances' || ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
+        <div className="dock" hidden={(ui.view === 'mail' || ui.view === 'news' || ui.view === 'finances' || ui.view === 'github' || ui.view === 'lists') && !data.notice && !data.archivedTask && !data.flash}>
           {/* Beside the composer, where the reader is looking; at the top of a long feed it would be out of sight. */}
           {data.notice && <Notice message={data.notice} onDismiss={() => data.setNotice('')} />}
           {data.archivedNotesToast ? (
@@ -283,7 +290,7 @@ export default function TaskSetScreen() {
             placeholder={ui.composer.placeholder}
             label={ui.composer.label}
             draftKey={ui.view === 'meetings' ? `meeting:${openMeeting?.id ?? 'list'}:${ui.meetings.detail?.date ?? ''}` : ui.section === 'calendar' ? `calendar:${ui.calendar.selected}` : ui.section}
-            hidden={ui.selecting || ui.view === 'news' || ui.view === 'finances' || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
+            hidden={ui.selecting || ui.view === 'mail' || ui.view === 'news' || ui.view === 'finances' || ui.view === 'github' || ui.view === 'map' || ui.view === 'lists'}
             onSend={(text) => send(text, 'text')}
           />
         </div>
