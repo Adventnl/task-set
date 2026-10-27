@@ -336,6 +336,19 @@ describe('persistent bank synchronisation', () => {
   })
 })
 describe('Akahu boundary', () => {
+  it('calls native fetch without binding the Akahu client as its receiver', async () => {
+    const nativeFetch = vi.fn(async function (this: unknown) {
+      // workerd rejects native fetch when called with a client instance as `this`.
+      if (this !== undefined && this !== globalThis)
+        throw new TypeError('Illegal invocation')
+      return Response.json({ success: true, item: { _id: 'owner' } })
+    })
+    vi.stubGlobal('fetch', nativeFetch)
+    await expect(new AkahuClient(env).request('/me')).resolves.toMatchObject({
+      success: true,
+    })
+    expect(nativeFetch).toHaveBeenCalledTimes(1)
+  })
   it('reports the failing endpoint and status without exposing credentials, query parameters or upstream bodies', async () => {
     const api = new AkahuClient(
       env,

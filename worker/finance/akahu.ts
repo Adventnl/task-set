@@ -58,7 +58,8 @@ function bankEndpoint(path: string): string {
 export class AkahuClient {
   constructor(
     private env: AkahuEnv,
-    private send: typeof fetch = fetch,
+    // Native Workers fetch must not receive this client as its `this` value.
+    private send: typeof fetch = (...args) => fetch(...args),
   ) {}
   async request(
     path: string,
