@@ -102,6 +102,7 @@ export interface FinanceSettings {
   timezone: string
 }
 export interface FinanceData {
+  categoryCounts?: Record<string, number>
   insightsAvailable?: boolean
   unreadCount: number
   configured: boolean
@@ -222,7 +223,13 @@ export interface FinanceReport {
   saved: boolean
 }
 export interface FinanceWorkbookPreview {
-  sheets: { name: string; totalRows: number; rows: string[][] }[]
+  sheets: {
+    name: string
+    totalRows: number
+    totalColumns: number
+    page: number
+    rows: string[][]
+  }[]
 }
 export interface FinanceReceiptMatch {
   merchant: string

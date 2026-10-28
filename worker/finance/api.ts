@@ -61,7 +61,10 @@ export async function financeApi(
       if (path.startsWith('/reports/')) {
         const preview = path.endsWith('/preview')
         const row = storage.sql
-          .exec<{ body: string; bytes: ArrayBuffer | null }>(
+          .exec<{
+            body: string
+            bytes: ArrayBuffer | null
+          }>(
             'SELECT body, bytes FROM finance_exports WHERE id = ?',
             decodeURIComponent(path.slice(9, preview ? -8 : undefined)),
           )
@@ -78,7 +81,15 @@ export async function financeApi(
         if (preview) {
           if (format !== 'xlsx')
             throw new Error('Only Excel workbooks have a sheet preview')
-          return json(await previewWorkbook(row.bytes))
+          return json(
+            await previewWorkbook(
+              row.bytes,
+              Number(url.searchParams.get('page') ?? 0),
+              url.searchParams.has('sheet')
+                ? Number(url.searchParams.get('sheet'))
+                : undefined,
+            ),
+          )
         }
         return new Response(row.bytes, {
           headers: {
@@ -101,7 +112,11 @@ export async function financeApi(
       if (path.startsWith('/receipts/')) {
         const id = decodeURIComponent(path.slice(10)),
           row = storage.sql
-            .exec<{ name: string; mime: string; bytes: ArrayBuffer }>(
+            .exec<{
+              name: string
+              mime: string
+              bytes: ArrayBuffer
+            }>(
               'SELECT name, mime, bytes FROM finance_attachments WHERE id = ?',
               id,
             )
@@ -267,6 +282,8 @@ export async function financeApi(
         bool(body.included),
         bool(body.archived),
       )
+    } else if (path === '/categories/delete') {
+      store.deleteCategory(short(body.id), short(body.replacement))
     } else if (path === '/categories/merge') {
       storage.transactionSync(() =>
         store.mergeCategories(short(body.from), short(body.to)),

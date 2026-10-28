@@ -37,7 +37,10 @@ const filter: FinanceFilter = {
   page: 0,
   oldest: false,
 }
-const env = { AKAHU_APP_TOKEN: 'fixture-app', AKAHU_USER_TOKEN: 'fixture-user' }
+const env = {
+  AKAHU_APP_TOKEN: 'fixture-app',
+  AKAHU_USER_TOKEN: 'fixture-user',
+}
 const account = (id = 'acc_1') => ({
   _id: id,
   name: 'Everyday',
@@ -914,11 +917,9 @@ it('coalesces merchant descriptions, caches abstentions and invalidates context 
   const { store, storage } = database(false),
     upstream = bank()
   await store.sync()
-  const run = vi
-    .fn()
-    .mockResolvedValue({
-      response: { certain: false, description: null, evidence: '' },
-    })
+  const run = vi.fn().mockResolvedValue({
+    response: { certain: false, description: null, evidence: '' },
+  })
   const enabled = new FinanceStore(storage, {
     ...env,
     AI: { run } as unknown as Env['AI'],
@@ -1047,4 +1048,264 @@ it('retains exact report binaries, lists reports, previews workbook sheets and r
     env,
   )
   expect(await historical.json()).toMatchObject([{ saved: false }])
+})
+
+const categoryDeletionEdit: FinanceEdit = {
+  category: 'groceries',
+  notes: '',
+  tags: [],
+  review: 'reviewed',
+  excluded: false,
+  transferId: null,
+  refundId: null,
+  splits: [],
+  createRule: false,
+}
+
+it('deletes a category atomically, moves split assignments, rules and budgets, and preserves bank facts and review metadata', async () => {
+  const { store, storage } = database()
+  bank()
+  await store.sync()
+  store.saveCategory({
+    id: 'child',
+    name: 'Child category',
+    kind: 'expense',
+    hidden: false,
+    color: 'amber',
+    parentId: 'groceries',
+  })
+  store.edit('tx_1', {
+    ...categoryDeletionEdit,
+    category: 'groceries',
+    review: 'reviewed',
+    notes: 'Keep my note',
+    splits: [
+      { category: 'groceries', amount: -2000 },
+      { category: 'gifts', amount: -450 },
+    ],
+  })
+  store.saveRule({
+    id: 'delete-rule',
+    text: 'Countdown',
+    match: 'exact',
+    category: 'groceries',
+    priority: 100,
+    enabled: true,
+    accountId: null,
+    direction: 'debit',
+  })
+  store.saveBudget({
+    id: 'delete-budget',
+    category: 'groceries',
+    amount: 10000,
+    period: 'monthly',
+    start: '2026-10-01',
+    archived: false,
+  })
+  const before = store.transaction('tx_1')!
+  const raw = storage.sql
+    .exec(
+      'SELECT original_raw, raw, body FROM finance_transactions WHERE id = ?',
+      'tx_1',
+    )
+    .toArray()
+  const response = await financeApi(
+    new Request('https://local/api/finance/categories/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'groceries', replacement: 'restaurants' }),
+    }),
+    store,
+    storage,
+    env,
+  )
+  expect(response.status).toBe(200)
+  expect(store.metadata().categories.some((c) => c.id === 'groceries')).toBe(
+    false,
+  )
+  expect(store.transaction('tx_1')).toMatchObject({
+    amount: before.amount,
+    notes: before.notes,
+    tags: before.tags,
+    reviewedAt: before.reviewedAt,
+    review: before.review,
+    transferId: before.transferId,
+    refundId: before.refundId,
+    category: 'restaurants',
+    splits: [
+      { category: 'restaurants', amount: -2000 },
+      { category: 'gifts', amount: -450 },
+    ],
+  })
+  expect(
+    storage.sql
+      .exec(
+        'SELECT original_raw, raw, body FROM finance_transactions WHERE id = ?',
+        'tx_1',
+      )
+      .toArray(),
+  ).toEqual(raw)
+  expect(store.metadata().categoryCounts).toMatchObject({
+    restaurants: 1,
+    gifts: 1,
+  })
+  expect(
+    store.metadata().rules.find((r) => r.id === 'delete-rule'),
+  ).toMatchObject({ category: 'restaurants', enabled: true })
+  expect(
+    store.metadata().budgets.find((b) => b.id === 'delete-budget'),
+  ).toMatchObject({ category: 'restaurants', archived: false })
+  expect(
+    store.metadata().categories.find((c) => c.id === 'child')?.parentId,
+  ).toBeNull()
+  expect(store.audit('tx_1')).toHaveLength(2)
+  expect(new FinanceStore(storage, env).transaction('tx_1')?.category).toBe(
+    'restaurants',
+  )
+})
+
+it('protects the internal category and validates replacements before deletion; uncategorised disables future rules', async () => {
+  const { store } = database()
+  bank()
+  await store.sync()
+  store.edit('tx_1', {
+    ...categoryDeletionEdit,
+    category: 'groceries',
+    createRule: true,
+  })
+  store.saveBudget({
+    id: 'budget',
+    category: 'groceries',
+    amount: 10000,
+    period: 'monthly',
+    start: '2026-10-01',
+    archived: false,
+  })
+  expect(() => store.deleteCategory('uncategorized', 'groceries')).toThrow(
+    'cannot be deleted',
+  )
+  expect(() => store.deleteCategory('groceries', 'groceries')).toThrow(
+    'different',
+  )
+  expect(() => store.deleteCategory('groceries', 'missing')).toThrow(
+    'different',
+  )
+  expect(store.transaction('tx_1')?.category).toBe('groceries')
+  store.deleteCategory('groceries', 'uncategorized')
+  expect(store.transaction('tx_1')).toMatchObject({
+    category: 'uncategorized',
+    review: 'reviewed',
+  })
+  expect(store.metadata().rules[0]).toMatchObject({
+    category: 'uncategorized',
+    enabled: false,
+  })
+  expect(store.metadata().budgets[0]).toMatchObject({
+    category: 'uncategorized',
+    archived: true,
+  })
+  expect(store.metadata().categoryCounts?.uncategorized).toBe(1)
+})
+
+it('browses every workbook row and column with bounded pages and rejects invalid sheet requests', async () => {
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('Large register')
+  sheet.addRow(Array.from({ length: 25 }, (_, i) => `Column ${i + 1}`))
+  for (let i = 1; i <= 328; i++)
+    sheet.addRow(
+      Array.from({ length: 25 }, (_, j) => `Row ${i} column ${j + 1}`),
+    )
+  workbook.addWorksheet('Empty')
+  const bytes = (await workbook.xlsx.writeBuffer()) as ArrayBuffer
+  const first = await previewWorkbook(bytes, 0, 0)
+  expect(first.sheets[0]).toMatchObject({
+    totalRows: 329,
+    totalColumns: 25,
+    page: 0,
+  })
+  expect(first.sheets[0].rows).toHaveLength(51)
+  const last = await previewWorkbook(bytes, 6, 0)
+  expect(last.sheets[0].rows).toHaveLength(29)
+  expect(last.sheets[0].rows[28][24]).toBe('Row 328 column 25')
+  expect(last.sheets[1].rows).toEqual([])
+  expect((await previewWorkbook(bytes, 100, 0)).sheets[0].page).toBe(6)
+  expect((await previewWorkbook(bytes, 0, 1)).sheets[1].rows).toEqual([])
+  await expect(previewWorkbook(bytes, -1)).rejects.toThrow('Invalid')
+  await expect(previewWorkbook(bytes, 0, 2)).rejects.toThrow('not found')
+})
+
+it('creates an Excel report for browser viewing and retains the identical downloadable file', async () => {
+  const { store, storage } = database()
+  bank()
+  await store.sync()
+  const created = await financeApi(
+    new Request('https://local/api/finance/export?format=xlsx&view=1'),
+    store,
+    storage,
+    env,
+  )
+  expect(created.headers.get('Content-Type')).toContain('application/json')
+  const { id } = (await created.json()) as { id: string }
+  const preview = await financeApi(
+    new Request(
+      `https://local/api/finance/reports/${id}/preview?sheet=1&page=0`,
+    ),
+    store,
+    storage,
+    env,
+  )
+  const data = (await preview.json()) as Awaited<
+    ReturnType<typeof previewWorkbook>
+  >
+  expect(data.sheets[1].rows[1]).toContain('Countdown')
+  expect(data.sheets[1].rows[1]).toContain('2026-10-19 01:00 UTC')
+  expect(data.sheets[1].rows[1]).toContain('-$24.50')
+  const download = await financeApi(
+    new Request(`https://local/api/finance/reports/${id}`),
+    store,
+    storage,
+    env,
+  )
+  expect(download.status).toBe(200)
+  expect(download.headers.get('Content-Type')).toContain('spreadsheetml')
+})
+
+it('rolls back every annotation when a category deletion cannot finish', async () => {
+  const { store, storage } = database()
+  bank()
+  await store.sync()
+  store.edit('tx_1', categoryDeletionEdit)
+  const original = store.transaction('tx_1')
+  const exec = storage.sql.exec.bind(storage.sql)
+  const failure = vi
+    .spyOn(storage.sql, 'exec')
+    .mockImplementation((query: string, ...params: unknown[]) => {
+      if (query.startsWith('DELETE FROM finance_categories'))
+        throw new Error('Synthetic write failure')
+      return exec(query, ...(params as SqlStorageValue[]))
+    })
+  expect(() => store.deleteCategory('groceries', 'restaurants')).toThrow(
+    'Synthetic write failure',
+  )
+  failure.mockRestore()
+  expect(store.transaction('tx_1')).toEqual(original)
+  expect(store.metadata().categories.some((c) => c.id === 'groceries')).toBe(
+    true,
+  )
+  expect(store.audit('tx_1')).toHaveLength(1)
+})
+
+it('paginates all 328 category transactions without duplicates or missing records', async () => {
+  const { store } = database()
+  bank(Array.from({ length: 328 }, (_, i) => tx(`category-${i}`)))
+  await store.sync()
+  for (let i = 0; i < 328; i++)
+    store.edit(`category-${i}`, categoryDeletionEdit)
+  const pages = Array.from({ length: 7 }, (_, page) =>
+    store.transactions({ ...filter, category: 'groceries', page }),
+  )
+  expect(pages.every((p) => p.total === 328)).toBe(true)
+  expect(pages[6].items).toHaveLength(28)
+  expect(new Set(pages.flatMap((p) => p.items.map((t) => t.id))).size).toBe(328)
+  expect(store.metadata().categoryCounts?.groceries).toBe(328)
 })

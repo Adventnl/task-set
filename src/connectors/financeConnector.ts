@@ -35,10 +35,21 @@ export async function getFinanceReports(
 }
 export async function getFinanceWorkbookPreview(
   id: string,
+  sheet = 0,
+  page = 0,
 ): Promise<FinanceWorkbookPreview> {
   return (await requestJson(
-    `/api/finance/reports/${encodeURIComponent(id)}/preview`,
+    `/api/finance/reports/${encodeURIComponent(id)}/preview?sheet=${sheet}&page=${page}`,
   )) as FinanceWorkbookPreview
+}
+export async function createFinanceWorkbook(
+  filter: FinanceFilter,
+  type: string,
+): Promise<string> {
+  const result = (await requestJson(
+    `/api/finance/export?${financeQuery(filter)}&format=xlsx&view=1&type=${encodeURIComponent(type)}`,
+  )) as { id: string }
+  return result.id
 }
 export async function generateFinanceInsight(
   id: string,

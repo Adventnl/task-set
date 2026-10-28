@@ -25,9 +25,13 @@ export function useFinance(active: boolean, signedIn: boolean) {
     })
   const [detail, setDetail] = useState<FinanceDetail | null>(null),
     [recurring, setRecurring] = useState<RecurringPayment[]>([])
+  const [reportsLoading, setReportsLoading] = useState(false)
   const [reports, setReports] = useState<FinanceReport[]>([])
-  const [workbook, setWorkbook] = useState<FinanceWorkbookPreview | null>(null)
+  const [workbook, setWorkbook] = useState<
+    (FinanceWorkbookPreview & { id: string; sheetIndex: number }) | null
+  >(null)
   const [insightError, setInsightError] = useState('')
+  const canvasRef = useRef<HTMLDivElement>(null)
   const [receipt, setReceipt] = useState<{
     file: File
     match: FinanceReceiptMatch
@@ -102,22 +106,17 @@ export function useFinance(active: boolean, signedIn: boolean) {
   }
   const filterKey = JSON.stringify(effective)
   useEffect(() => {
-    if (!active || !signedIn) return
+    canvasRef.current?.closest('.workspace-scroll')?.scrollTo({ top: 0 })
+  }, [tab])
+  const metricsKey = JSON.stringify({ ...effective, page: 0 })
+  const needsList = ['Transactions', 'Review Inbox', 'Overview'].includes(tab)
+  useEffect(() => {
+    if (!active || !signedIn || !needsList) return
     const controller = new AbortController()
     setLoading(true)
-    void Promise.all([
-      financeService.list(
-        JSON.parse(filterKey) as FinanceFilter,
-        controller.signal,
-      ),
-      financeService.metrics(
-        JSON.parse(filterKey) as FinanceFilter,
-        controller.signal,
-      ),
-      financeService.recurring(controller.signal),
-      financeService.reports(controller.signal),
-    ])
-      .then(([next, stats, recurring, reports]) => {
+    void financeService
+      .list(JSON.parse(filterKey) as FinanceFilter, controller.signal)
+      .then((next) => {
         if (!controller.signal.aborted) {
           if (!next.items.length && filter.page > 0) {
             setFilter((f) => ({
@@ -127,9 +126,6 @@ export function useFinance(active: boolean, signedIn: boolean) {
             return
           }
           setPage(next)
-          setMetrics(stats)
-          setRecurring(recurring)
-          setReports(reports)
         }
       })
       .catch((e: unknown) => {
@@ -140,8 +136,60 @@ export function useFinance(active: boolean, signedIn: boolean) {
         if (!controller.signal.aborted) setLoading(false)
       })
     return () => controller.abort()
-  }, [filterKey, active, signedIn, data])
-  async function run(operation: () => Promise<void>, success = '') {
+  }, [filterKey, active, signedIn, data, needsList])
+  useEffect(() => {
+    if (!active || !signedIn) return
+    const controller = new AbortController()
+    void financeService
+      .metrics(JSON.parse(metricsKey) as FinanceFilter, controller.signal)
+      .then((stats) => {
+        if (!controller.signal.aborted) setMetrics(stats)
+      })
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : 'Cannot load totals')
+      })
+    return () => controller.abort()
+  }, [metricsKey, active, signedIn, data])
+  useEffect(() => {
+    if (!active || !signedIn || tab !== 'Analytics') return
+    const controller = new AbortController()
+    void financeService
+      .recurring(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setRecurring(items)
+      })
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted)
+          setError(
+            e instanceof Error ? e.message : 'Cannot load recurring payments',
+          )
+      })
+    return () => controller.abort()
+  }, [tab, active, signedIn, data])
+  useEffect(() => {
+    if (!active || !signedIn || tab !== 'Reports') return
+    setReportsLoading(true)
+    const controller = new AbortController()
+    void financeService
+      .reports(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setReports(items)
+      })
+      .catch((e: unknown) => {
+        if (!controller.signal.aborted)
+          setError(e instanceof Error ? e.message : 'Cannot load reports')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setReportsLoading(false)
+      })
+    return () => controller.abort()
+  }, [tab, active, signedIn, data])
+  async function run(
+    operation: () => Promise<void>,
+    success = '',
+    reload = true,
+  ) {
     if (running.current) return false
     running.current = true
     setBusy(true)
@@ -150,7 +198,7 @@ export function useFinance(active: boolean, signedIn: boolean) {
     try {
       await operation()
       if (mounted.current && authorized.current) {
-        await load()
+        if (reload) await load()
         setMessage(success)
       }
       return true
@@ -209,7 +257,7 @@ export function useFinance(active: boolean, signedIn: boolean) {
     }
   }, [active, signedIn, data?.configured, data?.initialized, data?.lastSync])
   useEffect(() => {
-    if (tab === 'Review Inbox') return
+    if (tab === 'Review Inbox' || tab === 'Reports') return
     const overview = ['Overview', 'Analytics', 'Accounts'].includes(tab)
     savedFilter.current = overview
       ? { ...savedFilter.current, start: filter.start, end: filter.end }
@@ -280,28 +328,38 @@ export function useFinance(active: boolean, signedIn: boolean) {
     setMessage('')
     setTab(next)
     setFilter((f) =>
-      next === 'Review Inbox'
-        ? { ...EMPTY_FINANCE_FILTER }
-        : next === 'Overview' || next === 'Analytics'
-          ? {
-              ...EMPTY_FINANCE_FILTER,
-              start: savedFilter.current.start,
-              end: savedFilter.current.end,
-            }
-          : tab === 'Review Inbox' ||
-              (next === 'Transactions' &&
-                ['Overview', 'Analytics', 'Accounts'].includes(tab))
-            ? { ...savedFilter.current, page: 0 }
-            : { ...f, page: 0 },
+      next === 'Reports'
+        ? {
+            ...f,
+            review: tab === 'Review Inbox' ? effective.review : f.review,
+            page: 0,
+          }
+        : next === 'Review Inbox'
+          ? { ...EMPTY_FINANCE_FILTER }
+          : next === 'Overview' || next === 'Analytics'
+            ? {
+                ...EMPTY_FINANCE_FILTER,
+                start: savedFilter.current.start,
+                end: savedFilter.current.end,
+              }
+            : tab === 'Review Inbox' ||
+                tab === 'Reports' ||
+                (next === 'Transactions' &&
+                  ['Overview', 'Analytics', 'Accounts'].includes(tab))
+              ? { ...savedFilter.current, page: 0 }
+              : { ...f, page: 0 },
     )
     setTransaction(null)
+    setWorkbook(null)
   }
   return {
+    canvasRef,
     data,
     page,
     detail,
     recurring,
     reports,
+    reportsLoading,
     workbook,
     insightError,
     receipt,
@@ -314,6 +372,10 @@ export function useFinance(active: boolean, signedIn: boolean) {
     error,
     message,
     choose,
+    drillCategory: (category: string) => {
+      choose('Transactions')
+      setFilter({ ...EMPTY_FINANCE_FILTER, category })
+    },
     open,
     close: () => {
       revision.current++
@@ -345,13 +407,34 @@ export function useFinance(active: boolean, signedIn: boolean) {
         setDetail(detail)
         setTransaction(detail.transaction)
       }, 'Receipt matched and attached'),
-    previewWorkbook: (id: string) =>
+    previewWorkbook: (id: string, sheetIndex = 0, page = 0) =>
+      run(
+        async () => {
+          const request = revision.current
+          const preview = await financeService.preview(id, sheetIndex, page)
+          if (request === revision.current && mounted.current)
+            setWorkbook({ ...preview, id, sheetIndex })
+        },
+        '',
+        false,
+      ),
+    createWorkbook: (type: string) =>
       run(async () => {
         const request = revision.current
-        const preview = await financeService.preview(id)
+        const id = await financeService.createWorkbook(effective, type)
+        const preview = await financeService.preview(id, 0, 0)
         if (request === revision.current && mounted.current)
-          setWorkbook(preview)
-      }),
+          setWorkbook({ ...preview, id, sheetIndex: 0 })
+      }, 'Workbook saved to your report library'),
+    deleteCategory: (id: string, replacement: string) =>
+      run(async () => {
+        await financeService.command('categories/delete', { id, replacement })
+        setFilter((current) =>
+          current.category === id
+            ? { ...current, category: replacement, page: 0 }
+            : current,
+        )
+      }, 'Category deleted. Transactions kept.'),
     setFilter: (patch: Partial<FinanceFilter>) =>
       setFilter((f) => ({ ...f, ...patch, page: patch.page ?? 0 })),
     sync: () =>

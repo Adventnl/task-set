@@ -73,8 +73,8 @@ export function selectedFinancePeriod(
     }) ?? 'custom'
   )
 }
-export function paginationPages(page: number, total: number): number[] {
-  const last = Math.max(0, Math.ceil(total / 50) - 1)
+export function paginationPages(page: number, total: number, size = 50): number[] {
+  const last = Math.max(0, Math.ceil(total / size) - 1)
   return [
     ...new Set([0, last, ...Array.from({ length: 5 }, (_, i) => page + i - 2)]),
   ]

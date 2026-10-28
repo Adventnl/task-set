@@ -190,6 +190,82 @@ export class FinanceBookkeeping extends FinanceRepository {
     }
     this.put('categories', c.id, { ...c, name: c.name.trim(), system: false })
   }
+  deleteCategory(id: string, replacement: string): void {
+    const source = this.read<FinanceCategory>('categories', id)
+    if (!source || source.system || id === 'uncategorized')
+      throw new Error('This category cannot be deleted')
+    if (id === replacement || !this.read('categories', replacement))
+      throw new Error('Choose a different replacement category')
+    this.storage.transactionSync(() => {
+      // Join annotations once; source bank payloads and matching links stay intact.
+      const rows = this.sql
+        .exec<{
+          body: string
+          annotation: string | null
+        }>(
+          'SELECT t.body, b.body AS annotation FROM finance_transactions t LEFT JOIN finance_bookkeeping b ON b.transaction_id = t.id',
+        )
+        .toArray()
+      const now = new Date().toISOString()
+      for (const row of rows) {
+        const tx = {
+          ...JSON.parse(row.body),
+          ...(row.annotation ? JSON.parse(row.annotation) : {}),
+        } as FinanceTransaction
+        if (tx.category !== id && !tx.splits.some((s) => s.category === id))
+          continue
+        const updated = {
+          category: tx.category === id ? replacement : tx.category,
+          notes: tx.notes,
+          tags: tx.tags,
+          review: tx.review,
+          reviewedAt: tx.reviewedAt,
+          excluded: tx.excluded,
+          transferId: tx.transferId,
+          refundId: tx.refundId,
+          ruleId: tx.ruleId,
+          splits: tx.splits.map((s) => ({
+            ...s,
+            category: s.category === id ? replacement : s.category,
+          })),
+        }
+        this.sql.exec(
+          'INSERT OR REPLACE INTO finance_bookkeeping VALUES (?, ?)',
+          tx.id,
+          JSON.stringify(updated),
+        )
+        this.sql.exec(
+          'INSERT INTO finance_audit VALUES (?, ?, ?, ?, ?)',
+          crypto.randomUUID(),
+          tx.id,
+          now,
+          JSON.stringify(tx),
+          JSON.stringify(updated),
+        )
+      }
+      for (const rule of this.list<FinanceRule>('rules'))
+        if (rule.category === id)
+          this.put('rules', rule.id, {
+            ...rule,
+            category: replacement,
+            enabled: replacement === 'uncategorized' ? false : rule.enabled,
+          })
+      for (const budget of this.list<FinanceBudget>('budgets'))
+        if (budget.category === id)
+          this.put('budgets', budget.id, {
+            ...budget,
+            category: replacement,
+            archived: replacement === 'uncategorized' ? true : budget.archived,
+          })
+      for (const child of this.list<FinanceCategory>('categories'))
+        if (child.parentId === id)
+          this.put('categories', child.id, {
+            ...child,
+            parentId: source.parentId,
+          })
+      this.sql.exec('DELETE FROM finance_categories WHERE id = ?', id)
+    })
+  }
   mergeCategories(from: string, to: string): void {
     const source = this.read<FinanceCategory>('categories', from),
       target = this.read<FinanceCategory>('categories', to)

@@ -290,16 +290,27 @@ export async function report(
         ),
       ].join('\r\n')
   else throw new Error('Unsupported report format')
-  const bytes = typeof content === 'string' ? new TextEncoder().encode(content) : content as Uint8Array
+  const bytes =
+    typeof content === 'string'
+      ? new TextEncoder().encode(content)
+      : (content as Uint8Array)
   if (bytes.byteLength > 1_500_000)
-    throw new Error('This report is too large to save. Choose a smaller date range or an account.')
+    throw new Error(
+      'This report is too large to save. Choose a smaller date range or an account.',
+    )
+  const id = crypto.randomUUID()
   storage.sql.exec(
     'INSERT INTO finance_exports (id, created_at, body, bytes) VALUES (?, ?, ?, ?)',
-    crypto.randomUUID(),
+    id,
     new Date().toISOString(),
     JSON.stringify({ type, format, filter, count: data.total }),
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   )
+  if (url.searchParams.get('view') === '1')
+    return Response.json(
+      { id },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    )
   return new Response(content, {
     headers: {
       'Content-Type':

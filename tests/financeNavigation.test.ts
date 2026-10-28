@@ -27,6 +27,8 @@ vi.mock('../src/services/financeService', () => ({
     preferences: vi.fn(),
     savePreferences: vi.fn(),
     reports: vi.fn(),
+    preview: vi.fn(),
+    createWorkbook: vi.fn(),
   },
 }))
 let root: Root,
@@ -352,4 +354,106 @@ it('does not reopen a transaction after navigating away while its request is pen
   })
   expect(finance.transaction).toBeNull()
   expect(finance.tab).toBe('Accounts')
+})
+
+it('opens a category across all history without retaining unrelated filters', async () => {
+  await render()
+  await act(async () =>
+    finance.setFilter({
+      search: 'old query',
+      account: 'other',
+      review: 'reviewed',
+      start: '2026-10-01',
+      end: '2026-10-02',
+      tag: 'work',
+      direction: 'credit',
+    }),
+  )
+  await act(async () => finance.choose('Categories'))
+  await act(async () => finance.drillCategory('food'))
+  expect(finance.tab).toBe('Transactions')
+  expect(finance.filter).toEqual({ ...EMPTY_FINANCE_FILTER, category: 'food' })
+  expect(financeService.list).toHaveBeenLastCalledWith(
+    { ...EMPTY_FINANCE_FILTER, category: 'food' },
+    expect.any(AbortSignal),
+  )
+})
+it('does not refetch totals, recurring payments or report history when changing transaction pages', async () => {
+  await render()
+  vi.mocked(financeService.list).mockResolvedValue({
+    items: [{ id: 'row' } as FinanceTransaction],
+    total: 328,
+    income: 0,
+    expenses: 0,
+  })
+  const totalsCalls = vi.mocked(financeService.metrics).mock.calls.length
+  await act(async () => finance.setFilter({ page: 3 }))
+  expect(financeService.metrics).toHaveBeenCalledTimes(totalsCalls)
+  expect(financeService.recurring).not.toHaveBeenCalled()
+  expect(financeService.reports).not.toHaveBeenCalled()
+  expect(financeService.list).toHaveBeenLastCalledWith(
+    expect.objectContaining({ page: 3 }),
+    expect.any(AbortSignal),
+  )
+})
+it('keeps a failed category deletion available to retry and clears removed category filters after success', async () => {
+  await render()
+  await act(async () => finance.setFilter({ category: 'old' }))
+  vi.mocked(financeService.command).mockRejectedValueOnce(new Error('Offline'))
+  await act(async () => {
+    expect(await finance.deleteCategory('old', 'new')).toBe(false)
+  })
+  expect(finance.filter.category).toBe('old')
+  expect(finance.error).toBe('Offline')
+  await act(async () => {
+    expect(await finance.deleteCategory('old', 'new')).toBe(true)
+  })
+  expect(finance.filter.category).toBe('new')
+  expect(financeService.command).toHaveBeenLastCalledWith('categories/delete', {
+    id: 'old',
+    replacement: 'new',
+  })
+})
+it('opens newly generated workbooks in the browser and never reopens a late workbook after leaving Reports', async () => {
+  await render()
+  await act(async () => finance.choose('Reports'))
+  vi.mocked(financeService.createWorkbook).mockResolvedValue('saved-report')
+  vi.mocked(financeService.preview).mockResolvedValue({ sheets: [] })
+  await act(async () => {
+    await finance.createWorkbook('Transaction Register')
+  })
+  expect(finance.workbook).toMatchObject({ id: 'saved-report', sheetIndex: 0 })
+  let finish!: (preview: { sheets: [] }) => void
+  vi.mocked(financeService.preview).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  let preview!: Promise<boolean>
+  await act(async () => {
+    preview = finance.previewWorkbook('saved-report', 1, 6)
+  })
+  await act(async () => finance.choose('Categories'))
+  await act(async () => {
+    finish({ sheets: [] })
+    await preview
+  })
+  expect(finance.workbook).toBeNull()
+  expect(finance.tab).toBe('Categories')
+})
+
+it('exports the current review queue without replacing saved transaction preferences', async () => {
+  await render()
+  const saved = { ...finance.filter }
+  await act(async () => finance.choose('Review Inbox'))
+  await act(async () => finance.setFilter({ category: 'uncategorized' }))
+  await act(async () => finance.choose('Reports'))
+  expect(finance.filter).toMatchObject({
+    start: '',
+    end: '',
+    category: 'uncategorized',
+    review: 'needs-review',
+  })
+  await act(async () => finance.choose('Transactions'))
+  expect(finance.filter).toEqual(saved)
 })

@@ -1,12 +1,123 @@
+---
+name: Task Set
+description: "Task Set workspace; Finance tokens apply only to its operational dashboard."
+colors:
+  finance-canvas: "light-dark(#f6f8fb, #181c26)"
+  finance-sidebar: "light-dark(#eef1f7, #212737)"
+  finance-surface: "light-dark(#ffffff, #202532)"
+  finance-surface-hover: "light-dark(#f2f5fa, #2a3243)"
+  finance-surface-selected: "light-dark(#e9edf8, #333c53)"
+  finance-text: "light-dark(#202d43, #edf1fa)"
+  finance-text-secondary: "light-dark(#526078, #b8c3d8)"
+  finance-text-muted: "light-dark(#63718a, #a5b2c9)"
+  finance-line: "light-dark(#e7ebf2, #333c50)"
+  finance-line-strong: "light-dark(#d7dfea, #45516a)"
+  finance-control-border: "light-dark(#a0abc0, #8490a8)"
+  finance-accent: "light-dark(#5342c9, #b8adff)"
+  finance-accent-fill: "light-dark(#6354d9, #aa9bf7)"
+  finance-accent-fill-hover: "light-dark(#5142c4, #bbafff)"
+  finance-on-accent: "light-dark(#ffffff, #211b40)"
+  finance-accent-soft: "light-dark(#efedfd, #332e51)"
+  finance-accent-soft-hover: "light-dark(#e6e1fb, #413960)"
+  finance-status-good: "light-dark(#21714a, #6fd5a0)"
+typography:
+  finance-title:
+    fontFamily: "-apple-system, BlinkMacSystemFont, SF Pro Text, system-ui, Segoe UI, Roboto, Helvetica Neue, sans-serif"
+    fontSize: "32px"
+    fontWeight: 650
+    letterSpacing: "-0.02em"
+  finance-body:
+    fontFamily: "-apple-system, BlinkMacSystemFont, SF Pro Text, system-ui, Segoe UI, Roboto, Helvetica Neue, sans-serif"
+    fontSize: "13px"
+    lineHeight: 1.5
+  finance-label:
+    fontSize: "12px"
+rounded:
+  finance-field: "6px"
+  finance-panel: "8px"
+spacing:
+  finance-gap: "8px"
+  finance-row: "12px"
+  finance-compact: "16px"
+  finance-panel: "24px"
+components:
+  finance-button-primary:
+    backgroundColor: "{colors.finance-accent-fill}"
+    textColor: "{colors.finance-on-accent}"
+    rounded: "{rounded.finance-panel}"
+    padding: "8px 12px"
+  finance-panel:
+    backgroundColor: "{colors.finance-surface}"
+    textColor: "{colors.finance-text}"
+    rounded: "{rounded.finance-panel}"
+    padding: "24px"
+---
+
 # Task Set design
 
-## Finance workflow update - 27 October 2026
+## Finance dashboard — 28 October 2026
 
-Finance keeps the workspace paper/amber tokens and full-width canvas. Transactions is the entry view, with a saved 60-day range, a compact search field, select-page and numbered navigation at both ends of the register. Account/category filters stay in a disclosure. The all-history uncategorised inbox supports the initial classification pass. Review uses category buttons and optional notes in a modal, then Save & next advances without navigating away. Create categories inline; never seed user-facing templates. Keep receipts, AI merchant context and bank facts distinct from the user's notes.
+### Overview
 
-Overview, Analytics and Accounts use Recharts tooltips and a range brush with Reset zoom. Click a spending point to open that day's transactions; keep textual values available. Budget controls and monthly cash-flow rows are absent from the main screens. Account options are collapsed. Reports is a private library of retained CSV/Excel snapshots with a wide, scrollable sheet preview. On phones, controls wrap, charts stay within the viewport and only the workbook table or section strip scrolls horizontally. Preserve keyboard focus and 44px targets.
+**Creative North Star: "The operational ledger"**
+
+Finance is the owner's Stripe-inspired operational dashboard: cool neutral canvas, white work surfaces in light appearance, indigo actions and compact aligned rows. Its full-width workspace makes transaction review, category maintenance, bank health and saved reports directly usable. The Finance palette is scoped to the active Finance app shell and review dialogs; the other sections keep their existing paper-and-amber design.
+
+**Key Characteristics:**
+
+- Compact workspace chrome and a persistent inner section navigation on wide desktops.
+- Tables, precise counts and explicit pagination for growing datasets.
+- Restrained surfaces and typography with visible action, selection and status states.
+
+### Colors
+
+The normative `finance-*` frontmatter tokens mirror Finance's semantic overrides in `src/styles.css`, including both appearances. Primary indigo identifies actions, active navigation, selected filters and focus. Cool canvas, rail and surface neutrals distinguish the workspace layers; separate ink, secondary and muted text roles preserve hierarchy. Green identifies positive amounts or successful status; inherited danger tokens identify destructive actions and errors. Accompany status colors with words or icons.
+
+**The Scoped Palette Rule.** Apply these overrides only while Finance or a Finance review dialog is active. Finance does not replace the notes workspace's palette.
+
+### Typography
+
+Use the existing macOS system text and display stacks. The workspace title is compact (18 px); the current Finance page title is 32 px, weight 650, with slightly tightened tracking, falling to 24 px below 760 px. Panel titles use 15 px at weight 650, table and control text 13 px, and metadata 12 px. Financial values use tabular numerals and right alignment. Preserve descriptive labels and wrapping merchant/category names rather than enlarging rows for decoration.
+
+### Layout
+
+Finance uses the full available canvas. Above 1150 px, its inner navigation is 196 px wide and its main area uses 24 px padding. At 1150 px and below, the section navigation becomes a horizontal scrolling strip; at 600 px and below, a labelled section picker replaces that strip. Main padding becomes 16 px below 760 px. The shared outer workspace navigation remains available.
+
+Use the existing 4/8/12/16/24/32 px spacing steps for aligned groups. Page actions and dates wrap intentionally; phone header actions retain accessible names when their visible labels step aside. Dense rows keep explicit column alignment, count summaries and pagination. The workbook's own scroll region contains wide sheet content; sheet tabs and section strips may scroll horizontally without widening the page.
+
+### Elevation & Depth
+
+Finance panels are flat, with surface color and fine neutral borders defining groups. Do not add panel shadows. Review dialogs retain the existing modal elevation, dimmed backdrop and phone bottom-sheet behavior. Brief background/border transitions use the shared 120 ms easing; reduced-motion preferences remain respected.
+
+### Shapes
+
+Use softly squared controls and panels: 6 px field/navigation corners and 8 px button/panel corners. Thin dividers separate data rows. Keep rounder account containers where already established. Avoid turning operational rows into oversized pills or floating tiles.
+
+### Components
+
+**Buttons and fields.** Primary actions use the indigo fill and contrasting ink; secondary controls use a neutral surface and border. Hover changes the surface/fill, keyboard focus remains visible, and disabled actions use reduced opacity. Standard controls retain 44 px minimum height. Icon-only edit/delete actions have individual accessible names. Search fields use a leading Lucide icon and an explicit accessible label.
+
+**Navigation and filters.** The current inner section uses a soft indigo background with a stronger label. Removable filter chips state active category/search scope. Account/category and advanced filters stay behind Filters. Preserve the saved transaction period and the distinct all-history Review Inbox scope.
+
+**Review and charts.** Start Transactions with its saved rolling 60-day range, compact search and separate all-history uncategorised inbox. Review uses user-created category buttons, inline category creation, optional notes and Save & next in a modal; keep bank facts, receipts and AI merchant context distinct from user notes. Overview, Analytics and Accounts retain Recharts tooltips, a range brush, Reset zoom and daily-point drill-down with accessible textual values. Budget controls and monthly cash-flow rows stay off the main screens; account options remain collapsed.
+
+**Tables and pagination.** Transactions enter on 50-row pages with select-page/indeterminate selection and pagination above and below the register. Category rows show a name, kind, retained-history transaction count and separate Edit/Delete actions; name and count drill into that category. Categories page at 20 rows; report-library entries at 10. Pagination states the visible range, total, page position, Previous/Next and numbered destinations; on phones it reduces intermediate page buttons while preserving the current page and boundary navigation.
+
+**Reports and workbook.** Reports leads with report type and **Create & view Excel**, followed by CSV and the saved library. The read-only workbook has sheet tabs, data-row/column counts, a bounded scroll region with sticky column headers and row numbers, and explicit 50-data-row pagination above and below. Include every sheet column. Keep Download Excel and All reports available beside the viewer.
+
+**Settings and activity.** Settings separates Connection, Notifications, Category rules, Data & preferences and Activity. Activity shows five sync runs per page from the latest twenty and five notifications per page from the latest two hundred, with an Only failed runs filter and textual sync statuses.
+
+### Do's and Don'ts
+
+- **Do** use aligned rows, visible totals and explicit page controls for growing datasets.
+- **Do** keep category drill-down separate from named Edit and Delete actions, and confirm deletion with a replacement choice and a clear preservation statement.
+- **Do** keep loading, empty, no-match, failure and saved states actionable within the relevant panel.
+- **Don't** restore the oversized category-tile grid or an unbounded sync-history feed.
+- **Don't** truncate the workbook to a fixed first-row or first-column preview; page through all data rows and contain wide sheets in their scroll region.
 
 Status: implemented in the browser app, 26 September 2026; notes-app redesign and Archive on 27 September 2026; Calendar, Meetings, and the Tasks tabs later on 27 September 2026; a phone pass and no length limit on notes on 29 September 2026, for Mac browsers and as an installable phone app. `task.hanoryx.com` is the target address; it is not deployed yet.
+
+Finance input placeholders use `--text-muted` at full opacity in both appearances; do not leave them at the browser's default gray.
 
 ## Intent
 

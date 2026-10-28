@@ -120,12 +120,34 @@ export class FinanceStore extends FinanceBookkeeping {
   }
   metadata(): FinanceData {
     const stats = this.sql
-      .exec<{ count: number; earliest: string | null }>(
+      .exec<{
+        count: number
+        earliest: string | null
+      }>(
         'SELECT COUNT(*) AS count, MIN(date) AS earliest FROM finance_transactions',
       )
       .one()
     return {
       insightsAvailable: !!(this.env.AI || this.env.OPENROUTER_API_KEY),
+      categoryCounts: Object.fromEntries(
+        this.sql
+          .exec<{ category: string; count: number }>(
+            `
+        WITH annotated AS (
+          SELECT t.id, json_patch(t.body, COALESCE(b.body, '{}')) AS body
+          FROM finance_transactions t LEFT JOIN finance_bookkeeping b ON b.transaction_id = t.id
+        ), assignments AS (
+          SELECT id, json_extract(body, '$.category') AS category FROM annotated
+          UNION
+          SELECT a.id, json_extract(s.value, '$.category') AS category
+          FROM annotated a, json_each(a.body, '$.splits') s
+        )
+        SELECT category, COUNT(*) AS count FROM assignments GROUP BY category
+      `,
+          )
+          .toArray()
+          .map((r) => [r.category, r.count]),
+      ),
       configured: !!(this.env.AKAHU_APP_TOKEN && this.env.AKAHU_USER_TOKEN),
       initialized: !!this.read('settings', 'initialized'),
       accounts: this.list('accounts'),
@@ -133,7 +155,9 @@ export class FinanceStore extends FinanceBookkeeping {
       rules: this.list('rules'),
       budgets: this.list('budgets'),
       unreadCount: this.sql
-        .exec<{ count: number }>(
+        .exec<{
+          count: number
+        }>(
           'SELECT COUNT(*) AS count FROM finance_notifications WHERE read_at IS NULL',
         )
         .one().count,

@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T08:22:09.309593+00:00",
+  "title": "Design System: Task Set \u2014 Finance",
+  "extensions": {
+    "colorMeta": {
+      "finance-canvas": {
+        "role": "neutral",
+        "displayName": "Canvas"
+      },
+      "finance-sidebar": {
+        "role": "neutral",
+        "displayName": "Sidebar"
+      },
+      "finance-surface": {
+        "role": "neutral",
+        "displayName": "Surface"
+      },
+      "finance-surface-hover": {
+        "role": "neutral",
+        "displayName": "Surface Hover"
+      },
+      "finance-surface-selected": {
+        "role": "neutral",
+        "displayName": "Surface Selected"
+      },
+      "finance-text": {
+        "role": "neutral",
+        "displayName": "Text"
+      },
+      "finance-text-secondary": {
+        "role": "neutral",
+        "displayName": "Text Secondary"
+      },
+      "finance-text-muted": {
+        "role": "neutral",
+        "displayName": "Text Muted"
+      },
+      "finance-line": {
+        "role": "neutral",
+        "displayName": "Line"
+      },
+      "finance-line-strong": {
+        "role": "neutral",
+        "displayName": "Line Strong"
+      },
+      "finance-control-border": {
+        "role": "neutral",
+        "displayName": "Control Border"
+      },
+      "finance-accent": {
+        "role": "primary",
+        "displayName": "Accent"
+      },
+      "finance-accent-fill": {
+        "role": "primary",
+        "displayName": "Accent Fill"
+      },
+      "finance-accent-fill-hover": {
+        "role": "primary",
+        "displayName": "Accent Fill Hover"
+      },
+      "finance-on-accent": {
+        "role": "primary",
+        "displayName": "On Accent"
+      },
+      "finance-accent-soft": {
+        "role": "primary",
+        "displayName": "Accent Soft"
+      },
+      "finance-accent-soft-hover": {
+        "role": "primary",
+        "displayName": "Accent Soft Hover"
+      },
+      "finance-status-good": {
+        "role": "secondary",
+        "displayName": "Status Good"
+      }
+    },
+    "typographyMeta": {
+      "finance-title": {
+        "displayName": "Finance page title",
+        "purpose": "Names the current operational page; 24 px below 760 px."
+      },
+      "finance-body": {
+        "displayName": "Finance body",
+        "purpose": "Dense operational rows and controls."
+      },
+      "finance-label": {
+        "displayName": "Finance metadata",
+        "purpose": "Counts, timestamps and secondary details."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "finance-state-transition",
+        "value": "120ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Background and border state changes; shared reduced-motion override remains active."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "finance-horizontal-navigation",
+        "value": "1150px"
+      },
+      {
+        "name": "finance-compact-layout",
+        "value": "760px"
+      },
+      {
+        "name": "finance-section-picker",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Finance primary action",
+      "kind": "button",
+      "description": "Indigo action for workbook creation or the main current workflow.",
+      "html": "<button class=\"ds-finance-primary\">Create &amp; view Excel</button>",
+      "css": ".ds-finance-primary{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);min-height:44px;padding:8px 12px;border:1px solid light-dark(#d7dfea,#45516a);border-radius:8px;background:light-dark(#ffffff,#202532);cursor:pointer;transition:background-color 120ms cubic-bezier(.2,.8,.2,1),border-color 120ms cubic-bezier(.2,.8,.2,1);font-weight:600;background:light-dark(#6354d9,#aa9bf7);color:light-dark(#ffffff,#211b40);border-color:transparent}.ds-finance-primary:hover{background:light-dark(#5142c4,#bbafff)}.ds-finance-primary:focus-visible{outline:2px solid light-dark(#5342c9,#b8adff);outline-offset:2px}.ds-finance-primary:disabled{opacity:.5;cursor:default}",
+      "refersTo": "finance-button-primary"
+    },
+    {
+      "name": "Finance secondary action",
+      "kind": "button",
+      "description": "Bordered surface control for a secondary action.",
+      "html": "<button class=\"ds-finance-secondary\">View workbook</button>",
+      "css": ".ds-finance-secondary{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);min-height:44px;padding:8px 12px;border:1px solid light-dark(#d7dfea,#45516a);border-radius:8px;background:light-dark(#ffffff,#202532);cursor:pointer;transition:background-color 120ms cubic-bezier(.2,.8,.2,1),border-color 120ms cubic-bezier(.2,.8,.2,1);}.ds-finance-secondary:hover{background:light-dark(#f2f5fa,#2a3243)}.ds-finance-secondary:focus-visible{outline:2px solid light-dark(#5342c9,#b8adff);outline-offset:2px}.ds-finance-secondary:disabled{opacity:.5;cursor:default}"
+    },
+    {
+      "name": "Finance field",
+      "kind": "input",
+      "description": "Compact labelled field with the existing 44 px control height.",
+      "html": "<label class=\"ds-finance-label\">Category name<input class=\"ds-finance-field\" placeholder=\"Name your category\"></label>",
+      "css": ".ds-finance-label{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);display:grid;gap:4px}.ds-finance-field{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);min-height:44px;padding:8px;border:1px solid light-dark(#a0abc0,#8490a8);border-radius:6px;background:light-dark(#ffffff,#202532)}.ds-finance-field:focus-visible{outline:2px solid light-dark(#5342c9,#b8adff);outline-offset:2px}.ds-finance-field::placeholder{color:light-dark(#63718a,#a5b2c9);opacity:1}"
+    },
+    {
+      "name": "Finance section navigation",
+      "kind": "nav",
+      "description": "Wide-desktop inner navigation; source layout switches to a strip or picker at narrower widths.",
+      "html": "<nav class=\"ds-finance-nav\" aria-label=\"Finance sections\"><button aria-current=\"page\">Transactions</button><button>Categories</button><button>Reports</button></nav>",
+      "css": ".ds-finance-nav{display:grid;gap:4px;padding:12px;background:light-dark(#ffffff,#202532);width:196px}.ds-finance-nav button{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);min-height:44px;padding:8px 12px;border:1px solid light-dark(#d7dfea,#45516a);border-radius:8px;background:light-dark(#ffffff,#202532);cursor:pointer;transition:background-color 120ms cubic-bezier(.2,.8,.2,1),border-color 120ms cubic-bezier(.2,.8,.2,1);display:flex;align-items:center;text-align:left;border:0;border-radius:6px;font-weight:500;color:light-dark(#526078,#b8c3d8)}.ds-finance-nav button[aria-current]{background:light-dark(#efedfd,#332e51);color:light-dark(#5342c9,#b8adff);font-weight:650}.ds-finance-nav button:hover{background:light-dark(#f2f5fa,#2a3243);color:light-dark(#5342c9,#b8adff)}.ds-finance-nav button:focus-visible{outline:2px solid light-dark(#5342c9,#b8adff);outline-offset:2px}"
+    },
+    {
+      "name": "Finance active filter",
+      "kind": "chip",
+      "description": "Removable category scope after drill-down.",
+      "html": "<button class=\"ds-finance-chip\" aria-label=\"Remove Groceries category filter\">Category: Groceries <svg width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><path d=\"m18 6-12 12M6 6l12 12\"/></svg></button>",
+      "css": ".ds-finance-chip{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);min-height:44px;padding:8px 12px;border:1px solid light-dark(#d7dfea,#45516a);border-radius:8px;background:light-dark(#ffffff,#202532);cursor:pointer;transition:background-color 120ms cubic-bezier(.2,.8,.2,1),border-color 120ms cubic-bezier(.2,.8,.2,1);display:inline-flex;align-items:center;gap:8px;background:light-dark(#efedfd,#332e51);color:light-dark(#5342c9,#b8adff);border-color:transparent}.ds-finance-chip:hover{background:light-dark(#f2f5fa,#2a3243)}.ds-finance-chip:focus-visible{outline:2px solid light-dark(#5342c9,#b8adff);outline-offset:2px}"
+    },
+    {
+      "name": "Finance panel",
+      "kind": "card",
+      "description": "Flat bordered work surface; no decorative shadow.",
+      "html": "<section class=\"ds-finance-panel\"><h2>Report library</h2><p>Open saved Excel workbooks directly in your browser.</p></section>",
+      "css": ".ds-finance-panel{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);padding:24px;border:1px solid light-dark(#d7dfea,#45516a);border-radius:8px;background:light-dark(#ffffff,#202532)}.ds-finance-panel h2{font-size:15px;font-weight:650;margin:0}.ds-finance-panel p{margin:4px 0 0;color:light-dark(#63718a,#a5b2c9)}",
+      "refersTo": "finance-panel"
+    },
+    {
+      "name": "Finance pagination",
+      "kind": "custom",
+      "description": "Explicit visible range, total, page position and accessible numbered navigation.",
+      "html": "<div class=\"ds-finance-page\"><span>1\u201350 of 326 transactions<small>Page 1 of 7</small></span><div><button disabled>Previous</button><button aria-current=\"page\">1</button><button>2</button><button>Next</button></div></div>",
+      "css": ".ds-finance-page{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-block:12px;border-top:1px solid light-dark(#e7ebf2,#333c50)}.ds-finance-page small{display:block;font-size:12px;margin-top:4px;color:light-dark(#526078,#b8c3d8)}.ds-finance-page>div{display:flex;gap:4px;flex-wrap:wrap}.ds-finance-page button{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;font-size:13px;color:light-dark(#202d43,#edf1fa);min-height:44px;padding:8px 12px;border:1px solid light-dark(#d7dfea,#45516a);border-radius:8px;background:light-dark(#ffffff,#202532);cursor:pointer;transition:background-color 120ms cubic-bezier(.2,.8,.2,1),border-color 120ms cubic-bezier(.2,.8,.2,1);}.ds-finance-page button[aria-current]{background:light-dark(#efedfd,#332e51);border-color:light-dark(#5342c9,#b8adff);color:light-dark(#5342c9,#b8adff);font-weight:650}.ds-finance-page button:hover{background:light-dark(#f2f5fa,#2a3243)}.ds-finance-page button:focus-visible{outline:2px solid light-dark(#5342c9,#b8adff);outline-offset:2px}.ds-finance-page button:disabled{opacity:.5;cursor:default}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The operational ledger",
+    "overview": "Finance is the owner's Stripe-inspired operational dashboard: cool neutral canvas, white work surfaces in light appearance, indigo actions and compact aligned rows. Its full-width workspace makes transaction review, category maintenance, bank health and saved reports directly usable. The Finance palette is scoped to the active Finance app shell and review dialogs; the other sections keep their existing paper-and-amber design.",
+    "keyCharacteristics": [
+      "Compact workspace chrome and a persistent inner section navigation on wide desktops.",
+      "Tables, precise counts and explicit pagination for growing datasets.",
+      "Restrained surfaces and typography with visible action, selection and status states."
+    ],
+    "rules": [
+      {
+        "name": "The Scoped Palette Rule",
+        "body": "Apply these overrides only while Finance or a Finance review dialog is active. Finance does not replace the notes workspace's palette.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use aligned rows, visible totals and explicit page controls for growing datasets.",
+      "Do keep category drill-down separate from named Edit and Delete actions, and confirm deletion with a replacement choice and a clear preservation statement.",
+      "Do keep loading, empty, no-match, failure and saved states actionable within the relevant panel."
+    ],
+    "donts": [
+      "Don't restore the oversized category-tile grid or an unbounded sync-history feed.",
+      "Don't truncate the workbook to a fixed first-row or first-column preview; page through all data rows and contain wide sheets in their scroll region."
+    ]
+  }
+}
